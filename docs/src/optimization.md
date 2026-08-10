@@ -6,7 +6,7 @@ Here an example of `HeatPump` is shown.
 
 We set our `HeatPump`
 ```julia
-using Clapeyron, ThermoCycleGlides,Metaheuristics
+using Clapeyron, Carnot,Metaheuristics
 
 fluid = cPR("propane",idealmodel = ReidIdeal)
 hp = HeatPump(fluid=fluid, z=[1.0], T_evap_in=310, T_evap_out=300.0, T_cond_in=325, T_cond_out=355, η_comp=0.75, pp_evap=5, pp_cond=5, ΔT_sc=5.0, ΔT_sh=5.0)
@@ -22,7 +22,7 @@ algo = ECA(options = options)
 
 We optimize the system
 ```julia
-julia> result,hp_optimized = ThermoCycleGlides.optimize(hp,algo,ThermoCycleParameters())
+julia> x,sol_opt = Carnot.optimize(hp,algo,ThermoCycleParameters())
 ```
 
 ```julia
@@ -105,13 +105,18 @@ julia> result,hp_optimized = ThermoCycleGlides.optimize(hp,algo,ThermoCycleParam
   Stop reason:     Due to Convergence Termination criterion.
 ```
 
-To plot the cycle we do as before but now the optimized cycle is already returned by the `optimize` function - `hp_optimized`
+The optimization returns the superheating and subcooling temperatures along with the `SolutionState` at the optimized point. 
+
+```julia
+hp_optimized = hp;
+hp_optimized.ΔT_sh = x[1]
+hp_optimized.ΔT_sc = x[2]
+```
 
 **Note:** This is a metaheuristic method hence the converged answer for the user for this case can slighty be different based on number of function calls , time, solution etc ..
 
 ```julia
-sol = solve(hp_optimized,ThermoCycleParameters());
-plot(hp_optimized,sol,N = 100)
+plot(hp_optimized,sol_opt,N = 100)
 ```
 
 The `HeatPump` cycle before optimization had a COP of `-3.23`

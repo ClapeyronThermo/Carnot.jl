@@ -1,4 +1,4 @@
-module ThermoCycleGlides
+module Carnot
 
 using Clapeyron, Polynomials, Interpolations, FiniteDifferences
 using ForwardDiff#, LinearAlgebra

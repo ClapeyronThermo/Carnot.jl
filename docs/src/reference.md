@@ -14,5 +14,5 @@ Pages = ["reference.md"]
 
 
 ```@autodocs
-Modules = [ThermoCycleGlides]
+Modules = [Carnot]
 ```

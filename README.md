@@ -1,4 +1,4 @@
-# ThermoCycleGlides.jl
+# Carnot.jl
 
 [![Build Status](https://github.com/ClapeyronThermo/ThermoCycleGlides.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/ClapeyronThermo/ThermoCycleGlides.jl/actions/workflows/CI.yml?query=branch%3Amain) [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://clapeyronthermo.github.io/ThermoCycleGlides.jl/dev/)
 
@@ -10,7 +10,7 @@ The thermodynamic computations use Clapeyron.jl.
 For the latest release, first type `]` and then:
 
 ```julia
-pkg> add ThermoCycleGlides
+pkg> add Carnot
 ```
 
 For the developer version type:
@@ -23,7 +23,7 @@ pkg> add https://github.com/ClapeyronThermo/ThermoCycleGlides.jl
 Usage Heat Pump Example :
 
 ```julia
-julia> using Clapeyron, ThermoCycleGlides
+julia> using Clapeyron, Carnot
 
 julia> fluid = cPR(["cyclopentane"],idealmodel = ReidIdeal);
 

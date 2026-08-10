@@ -98,7 +98,7 @@ function IHEX_Q(fluid::EoSModel,ϵ::T1,T_in_left::T2,p_in_left::T3,T_in_right::T
 end
 
 
-function glide_match_coeff(prob::ThermoCycleGlides.ThermoCycleProblem,sol::SolutionState;N::Int = 20)
+function glide_match_coeff(prob::ThermoCycleProblem,sol::SolutionState;N::Int = 20)
 
 end
 

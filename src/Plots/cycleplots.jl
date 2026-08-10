@@ -12,8 +12,8 @@ function plotting_data(fluid::EoSModel,z::AbstractVector;N = 30,p_min = nothing,
     Td[end] = crit_mix(fluid,z)[1];
     Tb[end] = crit_mix(fluid,z)[1];
     if nanfix
-        ThermoCycleGlides.fix_nan!(Td)
-        ThermoCycleGlides.fix_nan!(Tb)
+        Carnot.fix_nan!(Td)
+        Carnot.fix_nan!(Tb)
     end
     s_bubble = similar(Tb);
     for i in eachindex(Tb)
@@ -39,7 +39,7 @@ function plotting_data(prob::HeatPump,sol::SolutionState;N = 30,p_min = nothing)
     T_evap_out = dew_temperature(prob.fluid, p_evap, prob.z)[1] + prob.ΔT_sh
     h_comp_in = enthalpy(prob.fluid, p_evap, T_evap_out,prob.z, phase = :vapor)
     crit = crit_mix!(prob)
-    h_comp_out = ThermoCycleGlides.isentropic_compressor(p_evap, p_cond, prob.η_comp, h_comp_in, prob.z, prob.fluid, crit)
+    h_comp_out = Carnot.isentropic_compressor(p_evap, p_cond, prob.η_comp, h_comp_in, prob.z, prob.fluid, crit)
     
     p_comp_array = collect(range(p_evap, p_cond, length = N))
     f_h(p_out) = isentropic_compressor(p_evap,p_out,prob.η_comp,h_comp_in,prob.z,prob.fluid,crit)
@@ -94,7 +94,7 @@ function plotting_data(prob::ORC,sol::SolutionState;N = 30,p_min = nothing)
 
     T_pump_in = bubble_temperature(prob.fluid, p_cond, prob.z)[1] - prob.ΔT_sc
     h_pump_in = Clapeyron.enthalpy(prob.fluid, p_cond, T_pump_in, prob.z)
-    h_pump_out = ThermoCycleGlides.isentropic_pump(p_cond, p_evap, prob.η_pump, h_pump_in, prob.z, prob.fluid)
+    h_pump_out = Carnot.isentropic_pump(p_cond, p_evap, prob.η_pump, h_pump_in, prob.z, prob.fluid)
     h_pump_array = collect(range(h_pump_in, h_pump_out, length = N))
     T_ph(p,h) = Clapeyron.PH.temperature(prob.fluid, p, h, prob.z)
     T_pump_array = T_ph.(p_cond, h_pump_array)
@@ -112,7 +112,7 @@ function plotting_data(prob::ORC,sol::SolutionState;N = 30,p_min = nothing)
  
 
     h_exp_in = h_evap_out
-    h_exp_out = ThermoCycleGlides.isentropic_expander(p_evap, p_cond, prob.η_expander, h_exp_in, prob.z, prob.fluid)
+    h_exp_out = Carnot.isentropic_expander(p_evap, p_cond, prob.η_expander, h_exp_in, prob.z, prob.fluid)
 
     p_exp_array = collect(range(p_evap, p_cond, length = N))
     f_h(p_out) = isentropic_expander(p_evap,p_out,prob.η_expander,h_exp_in,prob.z,prob.fluid)
@@ -158,11 +158,11 @@ function plotting_data(prob::HeatPumpRecuperator,sol::SolutionState;N = 30,p_min
     T_cond_out = Clapeyron.bubble_temperature(prob.hp.fluid, p_cond, prob.hp.z)[1] - prob.hp.ΔT_sc
     h_cond_out = Clapeyron.enthalpy(prob.hp.fluid, p_cond, T_cond_out, prob.hp.z)
 
-    q_ihex = ThermoCycleGlides.IHEX_Q(prob.hp.fluid,prob.ϵ,T_cond_out, p_cond, T_evap_out, p_evap, prob.hp.z)
+    q_ihex = Carnot.IHEX_Q(prob.hp.fluid,prob.ϵ,T_cond_out, p_cond, T_evap_out, p_evap, prob.hp.z)
     
     crit = crit_mix!(prob)
     h_comp_in =  q_ihex + h_evap_out  #enthalpy(prob.fluid, p_evap, T_evap_out,prob.z, phase = :vapor)
-    h_comp_out = ThermoCycleGlides.isentropic_compressor(p_evap, p_cond, prob.hp.η_comp, h_comp_in, prob.hp.z, prob.hp.fluid, crit)
+    h_comp_out = Carnot.isentropic_compressor(p_evap, p_cond, prob.hp.η_comp, h_comp_in, prob.hp.z, prob.hp.fluid, crit)
 
     p_comp_array = collect(range(p_evap, p_cond, length = N))
     f_h(p_out) = isentropic_compressor(p_evap,p_out,prob.hp.η_comp,h_comp_in,prob.hp.z,prob.hp.fluid,crit)
@@ -241,7 +241,7 @@ function plotting_data(prob::ORCEconomizer,sol::SolutionState;N = 30, p_min = no
     p_evap, p_cond = sol.x .* 101325 # convert to Pa
     T_pump_in = bubble_temperature(prob.orc.fluid, p_cond, prob.orc.z)[1] - prob.orc.ΔT_sc
     h_pump_in = Clapeyron.enthalpy(prob.orc.fluid, p_cond, T_pump_in, prob.orc.z)
-    h_pump_out = ThermoCycleGlides.isentropic_pump(p_cond, p_evap, prob.orc.η_pump, h_pump_in, prob.orc.z, prob.orc.fluid)
+    h_pump_out = Carnot.isentropic_pump(p_cond, p_evap, prob.orc.η_pump, h_pump_in, prob.orc.z, prob.orc.fluid)
     T_pump_out = Clapeyron.PH.temperature(prob.orc.fluid, p_evap, h_pump_out, prob.orc.z)
 
     h_pump_array = collect(range(h_pump_in, h_pump_out, length = N))
@@ -255,7 +255,7 @@ function plotting_data(prob::ORCEconomizer,sol::SolutionState;N = 30, p_min = no
     T_evap_out = dew_temperature(prob.orc.fluid, p_evap, prob.orc.z)[1] + prob.orc.ΔT_sh
     h_evap_out = Clapeyron.enthalpy(prob.orc.fluid, p_evap, T_evap_out, prob.orc.z)
     h_exp_in = h_evap_out
-    h_exp_out = ThermoCycleGlides.isentropic_expander(p_evap, p_cond, prob.orc.η_expander, h_exp_in, prob.orc.z, prob.orc.fluid)
+    h_exp_out = Carnot.isentropic_expander(p_evap, p_cond, prob.orc.η_expander, h_exp_in, prob.orc.z, prob.orc.fluid)
 
     p_exp_array = collect(range(p_evap, p_cond, length = N))
     f_h(p_out) = isentropic_expander(p_evap,p_out,prob.orc.η_expander,h_exp_in,prob.orc.z,prob.orc.fluid)
@@ -267,7 +267,7 @@ function plotting_data(prob::ORCEconomizer,sol::SolutionState;N = 30, p_min = no
     # Economizer
     h_econ_in = h_exp_out
     T_exp_out = T_ph(p_cond,h_econ_in)
-    q_ihex = ThermoCycleGlides.IHEX_Q(prob.orc.fluid,prob.ϵ,T_exp_out, p_cond, T_pump_out, p_evap, prob.orc.z)
+    q_ihex = Carnot.IHEX_Q(prob.orc.fluid,prob.ϵ,T_exp_out, p_cond, T_pump_out, p_evap, prob.orc.z)
     h_cond_in = h_econ_in - q_ihex
     h_evap_in = h_pump_out + q_ihex
     h_econ_cond_array = collect(range(h_exp_out, h_cond_in, length = N))
@@ -331,8 +331,8 @@ end
   Td[end] = crit_mix(fluid,z)[1];
   Tb[end] = crit_mix(fluid,z)[1];
     if nanfix
-        ThermoCycleGlides.fix_nan!(Td)
-        ThermoCycleGlides.fix_nan!(Tb)
+        Carnot.fix_nan!(Td)
+        Carnot.fix_nan!(Tb)
     end
     linewidth := 2
   @series begin
@@ -705,3 +705,19 @@ end
 end
 
 export f_plot
+
+# function plotting_data(prob::HeatPumpTranscritical,x::AbstractVector,T::AbstractVector;N = 30,p_min = nothing, nanfix = true)
+#     if isnothing(p_min)
+#       p_min = 0.5*x[1]*101325
+#   end
+#     fluid = prob.fluid
+#     z = prob.z
+#     T_crit,p_crit,_ = crit_mix(fluid,z)
+
+#     T_evap_out = dew_temperature(fluid, x[1]*101325, z)[1] + T[1]
+#     T_cond_out = T_crit - T[2]
+
+#     p_evap = x[1]*101325
+#     p_cond = x[2]*p_crit
+#     p_array = 
+# end

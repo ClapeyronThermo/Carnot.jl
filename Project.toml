@@ -1,5 +1,5 @@
-name = "ThermoCycleGlides"
-uuid = "58ad84e6-b92d-4139-8d7e-462257ec6cf0"
+name = "Carnot"
+uuid = "28d851de-1e30-436e-90c7-00bd6ee348bb"
 version = "0.2.12"
 authors = ["Sushrut"]
 
@@ -19,7 +19,7 @@ StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 Metaheuristics = "bcdb8e00-2c21-11e9-3065-2b553b22f898"
 
 [extensions]
-ThermoCycleGlidesMetaheuristicsExt = "Metaheuristics"
+CarnotMetaheuristicsExt = "Metaheuristics"
 
 [compat]
 Clapeyron = "0.6.26"
