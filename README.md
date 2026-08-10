@@ -1,6 +1,6 @@
 # Carnot.jl
 
-[![Build Status](https://github.com/ClapeyronThermo/ThermoCycleGlides.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/ClapeyronThermo/ThermoCycleGlides.jl/actions/workflows/CI.yml?query=branch%3Amain) [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://clapeyronthermo.github.io/ThermoCycleGlides.jl/dev/)
+[![Build Status](https://github.com/ClapeyronThermo/Carnot.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/ClapeyronThermo/Carnot.jl/actions/workflows/CI.yml?query=branch%3Amain) [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://clapeyronthermo.github.io/Carnot.jl/dev/)
 
 This package aims to solve Heat Pump and ORC systems for given known temperature glides. For now it is robust for sub-critical cycles. 
 
@@ -16,7 +16,7 @@ pkg> add Carnot
 For the developer version type:
 
 ```julia
-pkg> add https://github.com/ClapeyronThermo/ThermoCycleGlides.jl
+pkg> add https://github.com/ClapeyronThermo/Carnot.jl
 ```
 
 # Usage
