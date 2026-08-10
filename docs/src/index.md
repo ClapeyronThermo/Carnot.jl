@@ -1,7 +1,7 @@
 
-# ThermoCycleGlides.jl
+# Carnot.jl
 
-Documentation of ThermoCycleGlides.jl.
+Documentation of Carnot.jl.
 
 The goal of this package is to provide a non-linear solver for Heat Pump and Organic Rankine Cycle systems. It solves for pressures at the evaporator and the condensor for given pinch-point temperatures and provides a framework for plotting the solution. 
 As of now the package is robust for subcritical cycle parameters. For thermodynamic properties, [Clapeyron.jl](https://github.com/ClapeyronThermo/Clapeyron.jl) is used as backend. 

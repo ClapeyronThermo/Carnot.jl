@@ -77,6 +77,17 @@ function generate_initial_point(prob::HeatPumpVarEff,lb::AbstractVector{T},ub::A
     end       
 end
 
+function generate_initial_point(prob::HeatPumpTranscritical,lb::AbstractVector{T},ub::AbstractVector{T},x0_init::Symbol) where T<: Real
+    if x0_init == :default
+        return [
+            minimum(lb), maximum(ub)
+        ]
+    end
+    if x0_init == :average 
+        return @error "not implemented"
+    end       
+end
+
 
 """
 `generate_box_solve_bounds(prob::HeatPump) -> lb, ub`
@@ -106,6 +117,22 @@ function generate_box_solve_bounds(prob::HeatPump)
         throw(error("The upper bound on pressure is not finite. Check cycle parameters. Possible error on bubble_pressure calculation."))
     end
     return lb./101325, ub./101325 # normalize to 101325 Pa
+end
+
+
+function generate_box_solve_bounds(prob::HeatPumpTranscritical)
+    #Tcrit,pcrit,_ = crit_mix(prob.fluid, prob.z)
+    psat_min_evap = dew_pressure(prob.fluid,prob.T_evap_out - prob.pp_evap - prob.ΔT_sh,prob.z)[1]
+    psat_max_evap = bubble_pressure(prob.fluid,prob.T_evap_in ,prob.z)[1]
+
+    p_cond_min = 1.0 
+    p_cond_max = 2.0
+
+    lb = zeros(eltype(prob.z), 2)
+    ub = zeros(eltype(prob.z), 2)
+    lb[1] = psat_min_evap./101325; lb[2]= p_cond_min
+    ub[1] = psat_max_evap ./101325; ub[2] = p_cond_max
+    return lb, ub
 end
 
 """
@@ -290,6 +317,7 @@ function _build_least_squares_objective(prob::ThermoCycleProblem, N)
     end
 end
 
+
 function solve_ad(prob::ThermoCycleProblem,lb::AbstractVector,ub::AbstractVector;N::Int64 = 20,restart_TOL = 1e-3,xtol = 1e-8,ftol = 1e-8,max_iters = 1000,x0_init::Symbol = :default,verbose::Bool = false)
     f = _build_residual(prob, N)
     x0 = generate_initial_point(prob,lb,ub,x0_init)
@@ -391,3 +419,4 @@ function show(io::IO,params::ThermoCycleParameters)
     println(io, "  verbose         = ", params.verbose)
 end
 
+function optimize end
