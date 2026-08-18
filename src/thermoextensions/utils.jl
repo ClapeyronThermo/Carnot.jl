@@ -97,8 +97,14 @@ function IHEX_Q(fluid::EoSModel,ϵ::T1,T_in_left::T2,p_in_left::T3,T_in_right::T
     return Q
 end
 
-
+"""
+Computes the glide match coefficient for a given thermodynamic problem and solution state.
+"""
 function glide_match_coeff(prob::ThermoCycleProblem,sol::SolutionState;N::Int = 20)
+ 
+end
+
+function glide_match_val(wf::AbstractVector,sf::AbstractVector)
 
 end
 
@@ -138,4 +144,4 @@ function off_design_expander_relation(fluid::EoSModel,z,η_isen_design,built_in_
 end
 
 export off_design_compressor_relation, compute_isentropic_exponent
-export off_design_compressor_relation
+export off_design_expander_relation
