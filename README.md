@@ -13,6 +13,10 @@
 </p>
 
 
+> [!NOTE]
+> **Carnot.jl** was previously **ThermoCycleGlides.jl**. It has been rename to a more representable name for modeling thermodynamic cycles. 
+
+
 This package aims to solve Heat Pump and ORC systems for given known temperature glides. For now it is robust for sub-critical cycles. 
 
 The thermodynamic computations use Clapeyron.jl. 
