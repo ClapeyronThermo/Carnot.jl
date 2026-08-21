@@ -34,34 +34,54 @@ pkg> add https://github.com/ClapeyronThermo/Carnot.jl
 Usage Heat Pump Example :
 
 ```julia
-julia> using Clapeyron, Carnot
+ using Clapeyron, Carnot
 
-julia> fluid = cPR(["cyclopentane"],idealmodel = ReidIdeal);
+ fluid = cPR(["R134a"],idealmodel = ReidIdeal);
 
-julia> η_comp = 0.75; pp_cond = 2; pp_evap = 2;
+ η_comp = 0.75; pp_cond = 5; pp_evap = 5;
 
-julia> T_evap_in = 273.15 + 10; T_evap_out = 273.15 + 0; T_cond_in = 273.15 + 50;  T_cond_out = 273.15+60;
-
-julia> ΔT_sc = 3; ΔT_sh = 10;
-
-julia> hp = HeatPump(fluid=fluid,z=[1.0],T_evap_in=T_evap_in,T_evap_out = T_evap_out,T_cond_in = T_cond_in,T_cond_out=T_cond_out,η_comp=η_comp,pp_evap=pp_evap,pp_cond=pp_cond,ΔT_sc = ΔT_sc,ΔT_sh = ΔT_sh);
-
-julia> sol_hp = solve(hp,ThermoCycleParameters(autodiff=false))
-SolutionState{Float64, Int64}([0.12829257763094135, 1.4551588056942617], 20, 4, [1.1044676284654997e-10, 1.475086719437968e-10], [0.07660159441435545, 0.07660159441435545], [1.6566058479359296, 1.6566058479359296], false, 2, 2.859273217366616e-7, 1.8427505452964792e-10, :subcritical)
+ T_evap_in = 273.15 + 20; T_evap_out = 273.15 + 0; 
  
-julia> COP(hp,sol_hp)
--3.735868783511875
+ T_cond_in = 273.15 + 30;  T_cond_out = 273.15+60;
+
+ ΔT_sc = 15; ΔT_sh = 10;
+
+ hp = HeatPump(fluid=fluid,z=[1.0],
+                T_evap_in=T_evap_in,T_evap_out = T_evap_out,
+                T_cond_in = T_cond_in,T_cond_out=T_cond_out,
+                η_comp=η_comp,
+                pp_evap=pp_evap,pp_cond=pp_cond,
+                ΔT_sc = ΔT_sc,ΔT_sh = ΔT_sh);
+
 ```
 
-To plot do the following;
+To solve do the following:
 
 ```julia
-julia> using Plots
+julia>  sol_hp = solve(hp,ThermoCycleParameters(autodiff=false))
+SolutionState{Float64, Int64}([2.3994048422328, 16.817386905557985], 20, 4, [5.935589797445573e-10, 3.0524915928253904e-11], [1.6183989368988956, 1.6183989368988956], [26.13980387599181, 26.13980387599181], false, 2, 8.149495449471192e-7, 5.943433628196976e-10, :subcritical)
 
-julia> plot(hp,sol_hp,N = 100)
+julia> COP(hp,sol_hp)
+-3.445859140654867
 ```
 
-![HP_cyclopentane](docs/src/Images/hp_cyclopentane.png)
+To plot do the following:
+
+```julia
+julia>  using Plots
+julia>  default(
+                  fontfamily = "DejaVu Sans",
+                  guidefontsize = 14,
+                  tickfontsize = 11,
+                  legendfontsize = 11,
+                  titlefontsize = 14,
+                  dpi = 500,
+                  framestyle = :box
+              )
+julia>  plot(hp,sol_hp,N = 100)
+```
+
+![HP_cyclopentane](docs/src/Images/hp_r134a.png)
 
 
 # Limitation

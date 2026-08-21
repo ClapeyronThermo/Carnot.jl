@@ -27,7 +27,7 @@ solverparams_fd = ThermoCycleParameters(
     x0_init = :default
 )
 
-@testset "Isentopic Compression - Single Component" begin
+@testset "Isentropic Compression - Single Component" begin
    for i in eachindex(eos_)
         for fluid in fluids_test
             fluid_model = eos_[i](fluid,idealmodel = ReidIdeal)
@@ -42,7 +42,7 @@ solverparams_fd = ThermoCycleParameters(
     end
 end
 
-@testset "Isentopic pump - Single Component" begin
+@testset "Isentropic pump - Single Component" begin
     for i in eachindex(eos_)
         for fluid in fluids_test
             fluid_model = eos_[i](fluid,idealmodel = ReidIdeal)
@@ -57,7 +57,7 @@ end
     end
 end
 
-@testset "Isentopic Expansion - Single Component" begin
+@testset "Isentropic Expansion - Single Component" begin
     for i in eachindex(eos_)
         for fluid in fluids_test
             fluid_model = eos_[i](fluid,idealmodel = ReidIdeal)
