@@ -1087,3 +1087,52 @@ function show(io::IO,prob::HeatPumpTranscritical)
     println(io, "  Evaporator Pressure Drop: $(prob.pp_evap)")
     println(io, "  Condenser Pressure Drop: $(prob.pp_cond)")
 end
+
+
+
+function get_temperature_profiles(prob::HeatPump,sol::SolutionState,N::Int = 20)
+    states = get_states(prob,sol)
+    p_cond = states[:p_cond]
+    h_cond_in = states[:h_comp_out].*Clapeyron.molecular_weight(prob.fluid,prob.z)
+    h_cond_out = states[:h_cond_out].*Clapeyron.molecular_weight(prob.fluid,prob.z)
+
+
+    p_evap = states[:p_evap]
+    h_evap_in = states[:h_valve_out].*Clapeyron.molecular_weight(prob.fluid,prob.z)
+    h_evap_out = states[:h_evap_out].*Clapeyron.molecular_weight(prob.fluid,prob.z)
+
+    h_cond_array = collect(range(h_cond_in, stop=h_cond_out, length=N))
+    T_cond_array = [Clapeyron.PH.temperature(prob.fluid, p_cond, h, prob.z) for h in h_cond_array]
+    T_cond_sf_array_f(h) = prob.T_cond_out - (h_cond_in - h)*(prob.T_cond_out - prob.T_cond_in)/(h_cond_in - h_cond_out)
+    T_cond_sf_array = T_cond_sf_array_f.(h_cond_array)
+
+    h_evap_array = collect(range(h_evap_out, stop=h_evap_in, length=N))
+    T_evap_array = [Clapeyron.PH.temperature(prob.fluid, p_evap, h, prob.z) for h in h_evap_array]
+    T_evap_sf_array_f(h) = prob.T_evap_in - (h_evap_out - h)*(prob.T_evap_in - prob.T_evap_out)/(h_evap_out - h_evap_in)
+    T_evap_sf_array = T_evap_sf_array_f.(h_evap_array)
+
+
+    return Dict(
+        :T_cond_array => T_cond_array,
+        :T_cond_sf_array => T_cond_sf_array,
+        :h_cond_array => h_cond_array,
+        :T_evap_array => T_evap_array,
+        :T_evap_sf_array => T_evap_sf_array,
+        :h_evap_array => h_evap_array
+    )
+end
+
+function glide_match_coeff(prob::HeatPump,sol::SolutionState,N::Int)
+    profiles = get_temperature_profiles(prob,sol,N)
+    T_cond_array = profiles[:T_cond_array]
+    T_cond_sf_array = profiles[:T_cond_sf_array]
+
+    T_evap_array = profiles[:T_evap_array]
+    T_evap_sf_array = profiles[:T_evap_sf_array]
+
+    πe =  N*prob.pp_evap/sum(abs.(T_evap_array .- T_evap_sf_array))
+    πc =  N*prob.pp_cond/sum(abs.(T_cond_array .- T_cond_sf_array))
+    return πe, πc
+end
+
+export get_temperature_profiles, glide_match_coeff

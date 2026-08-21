@@ -108,6 +108,8 @@ function glide_match_val(wf::AbstractVector,sf::AbstractVector)
 
 end
 
+
+
 compute_isentropic_exponent(fluid::EoSModel,p,T,z) = Clapeyron.adiabatic_index(fluid,p_ref,T_ref,z)
 
 function ideal_compression_relation(κ,V_ratio,η,x)
