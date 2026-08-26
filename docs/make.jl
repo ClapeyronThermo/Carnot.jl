@@ -1,16 +1,25 @@
-using Documenter, Carnot
+using Documenter, DocumenterVitepress, Carnot
 
 makedocs(
-sitename="Carnot.jl",
-modules = [Carnot],
-doctest = true,
-pages = [
-    "Home" => "index.md",
-    "Examples" => "examples.md",
-    "Optimization" => "optimization.md",
-    # "Cycle Optimization" => "Optimization.md",
-    "References" => "reference.md"
-]
+    sitename = "Carnot.jl",
+    modules = [Carnot],
+    doctest = true,
+    format = DocumenterVitepress.MarkdownVitepress(
+        repo = "https://github.com/ClapeyronThermo/Carnot.jl",
+    ),
+    warnonly = Documenter.except(),
+    pages = [
+        "Home" => "index.md",
+        "Examples" => "examples.md",
+        "Optimization" => "optimization.md",
+        "References" => "reference.md",
+    ],
 )
 
-deploydocs(repo = "github.com/ClapeyronThermo/Carnot.jl",push_preview = true)
+DocumenterVitepress.deploydocs(
+    repo = "github.com/ClapeyronThermo/Carnot.jl.git",
+    target = "build",
+    branch = "gh-pages",
+    devbranch = "main",
+    push_preview = true,
+)
