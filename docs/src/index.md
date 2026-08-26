@@ -73,21 +73,21 @@ The implemented version of these systems consist of the following components:
       <img class="related-pkg-logo" src="/assets/related_clapeyron_logo.svg" alt="Clapeyron.jl" />
     </div>
     <h3 class="related-pkg-title">Clapeyron.jl</h3>
-    <p class="related-pkg-details">Provides every bulk equation of state ClassicalDFT builds its inhomogeneous functionals on top of, and is required alongside ClassicalDFT for essentially all use.</p>
+    <p class="related-pkg-details">Provides every bulk equation of state used within Carnot, and is required alongside Carnot for essentially all use.</p>
   </a>
   <a class="related-pkg-card" href="https://clapeyronthermo.github.io/GCIdentifier.jl/" target="_blank" rel="noreferrer">
     <div class="related-pkg-logo-wrap">
       <img class="related-pkg-logo" src="/assets/related_gcidentifier_logo.png" alt="GCIdentifier.jl" />
     </div>
     <h3 class="related-pkg-title">GCIdentifier.jl</h3>
-    <p class="related-pkg-details">Group contribution identification from SMILES, used for building heterosegmented and group-contribution ClassicalDFT models.</p>
+    <p class="related-pkg-details">Group contribution identification from SMILES, used for building heterosegmented and group-contribution models.</p>
   </a>
   <a class="related-pkg-card" href="https://clapeyronthermo.github.io/Langmuir.jl/" target="_blank" rel="noreferrer">
     <div class="related-pkg-logo-wrap">
       <img class="related-pkg-logo" src="/assets/related_langmuir_logo.png" alt="Langmuir.jl" />
     </div>
     <h3 class="related-pkg-title">Langmuir.jl</h3>
-    <p class="related-pkg-details">Single- and multi-component adsorption equilibrium models, complementary to ClassicalDFT's own adsorption isotherm calculations.</p>
+    <p class="related-pkg-details">Single- and multi-component adsorption equilibrium models.</p>
   </a>
 </div>
 
