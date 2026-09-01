@@ -35,12 +35,21 @@ algo = ECA(options = options)
 sol,η_opt =  Carnot.optimize(orc,algo,param)
 ```
 
-The solution returns the `SolutionState` with `sol.x` being the vector of pressures, super and subcooling temperatures. And `sol.residues` returns the pinch point temperature in the evaporator and condensor. 
+The solution returns the `SolutionState` with `sol.x` being the vector of pressures, super and subcooling temperatures. And `sol.residuals` returns the pinch point temperature in the evaporator and condensor. 
 
 The solution can be plotted as:
 
 ```julia
 using Plots
+default(
+           fontfamily = "DejaVu Sans",
+           guidefontsize = 14,
+           tickfontsize = 11,
+           legendfontsize = 11,
+           titlefontsize = 14,
+           dpi = 500,
+           framestyle = :box
+       )
 fig = plot(fluid,sol,N = 100)
 ```
 
