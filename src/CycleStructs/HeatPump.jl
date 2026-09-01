@@ -1089,7 +1089,11 @@ function show(io::IO,prob::HeatPumpTranscritical)
 end
 
 
+"""
+`get_temperature_profiles(prob::HeatPump,sol::SolutionState,N::Int = 20)`
 
+Returns the temperature profile over the heat exchangers for `HeatPump` problem and given `SolutionState`. 
+"""
 function get_temperature_profiles(prob::HeatPump,sol::SolutionState,N::Int = 20)
     states = get_states(prob,sol)
     p_cond = states[:p_cond]

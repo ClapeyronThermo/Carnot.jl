@@ -22,7 +22,7 @@ Metaheuristics = "bcdb8e00-2c21-11e9-3065-2b553b22f898"
 CarnotMetaheuristicsExt = "Metaheuristics"
 
 [compat]
-Clapeyron = "0.6.26"
+Clapeyron = "0.6.25"
 CommonSolve = "0.2"
 CoolProp = "0.2.2"
 FiniteDifferences = "0.12.32"

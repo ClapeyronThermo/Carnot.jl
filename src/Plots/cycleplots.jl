@@ -317,6 +317,185 @@ function plotting_data(prob::ORCEconomizer,sol::SolutionState;N = 30, p_min = no
     return dict
 end
 
+function plotting_data(prob::TranscriticalORC,sol::SolutionState;N = 30, p_min = nothing)
+    T_crit,p_crit,_ = crit_pure(prob.fluid)
+    x = sol.x
+    p_evap = x[1]*p_crit
+    p_cond = x[2]*101325;
+    ΔT_sh = x[3]
+    ΔT_sc = x[4]
+    if isnothing(p_min)
+        p_min = 0.5*p_cond
+    end
+    z = [1.0]
+        # Thermodynamic property functions
+    T_ph(p, h) = Clapeyron.PH.temperature(prob.fluid, p, h, z)
+    s_ph(p, h) = Clapeyron.PH.entropy(prob.fluid, p, h, z)
+    T_cond_sat = Clapeyron.saturation_temperature(prob.fluid, p_cond)[1]
+
+    T_cond_out = T_cond_sat - ΔT_sc
+        h_cond_out = Clapeyron.enthalpy(
+        prob.fluid,
+        p_cond,
+        T_cond_out,
+        z
+    )
+        # ------------------------------------------------------------
+    # Pump
+    # ------------------------------------------------------------
+
+    h_pump_in = h_cond_out
+
+    h_pump_out = Carnot.isentropic_pump(
+        p_cond,
+        p_evap,
+        prob.η_pump,
+        h_pump_in,
+        z,
+        prob.fluid
+    )
+
+    h_pump_array = collect(
+        range(h_pump_in, h_pump_out, length = N)
+    )
+    T_pump_array = T_ph.(p_cond, h_pump_array)
+
+
+    s_pump_array =
+        s_ph.(p_cond, h_pump_array) ./ molecular_weight(prob.fluid, z)
+
+     # ------------------------------------------------------------
+    # Transcritical evaporator
+    # ------------------------------------------------------------
+
+    # Outlet temperature is defined relative to the critical
+    # temperature in the transcritical formulation
+    T_evap_out = T_crit + ΔT_sh
+
+    h_evap_out = Clapeyron.enthalpy(
+        prob.fluid,
+        p_evap,
+        T_evap_out,
+        z
+    )
+
+    h_evap_in = h_pump_out
+
+    h_evap_array = collect(
+        range(h_evap_in, h_evap_out, length = N)
+    )
+
+    T_evap_array = T_ph.(p_evap, h_evap_array)
+
+    s_evap_array =
+        s_ph.(p_evap, h_evap_array) ./ molecular_weight(prob.fluid, z)
+
+    # Secondary fluid temperature
+    T_evap_sf_array = collect(
+        range(prob.T_evap_out, prob.T_evap_in, length = N)
+    )
+
+     # ------------------------------------------------------------
+    # Expander
+    # ------------------------------------------------------------
+
+    h_exp_in = h_evap_out
+
+    h_exp_out = Carnot.isentropic_expander(
+        p_evap,
+        p_cond,
+        prob.η_expander,
+        h_exp_in,
+        z,
+        prob.fluid
+    )
+
+    # Pressure path through expander
+    p_exp_array = collect(
+        range(p_evap, p_cond, length = N)
+    )
+    
+    f_h(p_out) = Carnot.isentropic_expander_nophase(
+        p_evap,
+        p_out,
+        prob.η_expander,
+        h_exp_in,
+        z,
+        prob.fluid
+    )
+
+    h_exp_array = f_h.(p_exp_array)
+  
+    T_exp_array = T_ph.(p_exp_array, h_exp_array)
+
+    s_exp_array =
+        s_ph.(p_exp_array, h_exp_array) ./ molecular_weight(prob.fluid, z)
+
+    # ------------------------------------------------------------
+    # Condenser
+    # ------------------------------------------------------------
+
+    h_cond_in = h_exp_out
+
+    # h_cond_sat_vapour = Clapeyron.enthalpy(
+    #     prob.fluid,
+    #     p_cond,
+    #     T_cond_sat,
+    #     z,
+    #     phase = :vapour
+    # )
+
+    # h_cond_sat_liquid = Clapeyron.enthalpy(
+    #     prob.fluid,
+    #     p_cond,
+    #     T_cond_sat,
+    #     z,
+    #     phase = :liquid
+    # )
+
+    # # Include the two-phase region explicitly
+    # h_cond_array = [
+    #     h_cond_in,
+    #     h_cond_sat_vapour,
+    #     h_cond_sat_liquid,
+    #     h_cond_out
+    # ]
+
+    h_cond_array = collect(range(h_cond_in,h_cond_out,N))
+    T_cond_array = T_ph.(p_cond, h_cond_array)
+
+    s_cond_array =
+        s_ph.(p_cond, h_cond_array) ./ molecular_weight(prob.fluid, z)
+
+    # Spatial coordinate based on enthalpy change
+    x_cond(h) = (h_cond_in - h) / (h_cond_in - h_cond_out)
+
+    # Secondary fluid temperature
+    T_cond_sf_f(h) =  prob.T_cond_in + x_cond(h)*(prob.T_cond_out - prob.T_cond_in)
+    T_cond_sf_array = T_cond_sf_f.(reverse(h_cond_array))
+
+    # ------------------------------------------------------------
+    # Return plotting data
+    # ------------------------------------------------------------
+
+    return Dict(
+        :s_pump_array => s_pump_array,
+        :T_pump_array => T_pump_array,
+
+        :s_evap_array => s_evap_array,
+        :T_evap_array => T_evap_array,
+
+        :s_exp_array => s_exp_array,
+        :T_exp_array => T_exp_array,
+
+        :s_cond_array => s_cond_array,
+        :T_cond_array => T_cond_array,
+
+        :T_evap_sf_array => T_evap_sf_array,
+        :T_cond_sf_array => T_cond_sf_array
+    ), p_min
+end
+
 @recipe function f_phase(fluid::EoSModel,z::AbstractVector;N = 30,p_min = nothing,nanfix = true) 
   @assert length(fluid.components) == length(z) "Components and composition vector length mismatch"
   if isnothing(p_min)
@@ -443,6 +622,83 @@ end
 @recipe function f_plot(prob::ORC,sol::SolutionState;N = 30,p_min = nothing,nanfix = true)
     orcdata,_p_min = plotting_data(prob,sol,N=N,p_min=p_min)
     phasedata = plotting_data(prob.fluid,prob.z;N=N,p_min=_p_min,nanfix=nanfix)
+    
+
+    # phase envelope - dew
+    @series begin
+        
+        linestyle := :solid
+        linewidth := 2
+        markercolor := :red
+        label := false
+        (phasedata[:s_dew], phasedata[:Td])
+    end
+    @series begin
+        # phase envelope - bubble
+        linewidth := 2
+        linestyle := :solid
+        markercolor := :blue
+        label := false
+        (phasedata[:s_bubble], phasedata[:Tb])
+    end
+
+    @series begin
+        # pump
+        linewidth := 2
+        linestyle := :solid
+        linecolor := :black
+        label := false
+        (orcdata[:s_pump_array], orcdata[:T_pump_array])
+    end
+    @series begin
+        # evaporator
+        linewidth := 2
+        linestyle := :solid
+        linecolor := :black
+        label := false
+        (orcdata[:s_evap_array], orcdata[:T_evap_array])
+    end
+    @series begin
+        # expander
+        linewidth := 2
+        linestyle := :solid
+        linecolor := :black
+        label := false
+        (orcdata[:s_exp_array], orcdata[:T_exp_array])
+    end
+    @series begin
+        # condensor
+        linewidth := 2
+        linestyle := :solid
+        linecolor := :black
+        label := false
+        (orcdata[:s_cond_array], orcdata[:T_cond_array])
+    end
+    @series begin
+        # sf evaporator
+        linewidth := 2
+        linestyle := :dash
+        linecolor := :blue
+        label := "Secondary Fluid Evaporator"
+        (orcdata[:s_evap_array], orcdata[:T_evap_sf_array])
+    end
+    @series begin
+        # sf condenser
+        linewidth := 2
+        linestyle := :dash
+        linecolor := :red
+        label := "Secondary Fluid Condenser"
+        ylabel := "Temperature (K)"
+        xlabel := "Specific Entropy (J/K/kg)"
+        title := "$(prob.fluid.components)"
+        (orcdata[:s_cond_array], orcdata[:T_cond_sf_array])
+    end
+    
+end
+
+@recipe function f_plot(prob::TranscriticalORC,sol::SolutionState;N = 30,p_min = nothing,nanfix = true)
+    orcdata,_p_min = plotting_data(prob,sol,N=N,p_min=p_min); z = [1.0]
+    phasedata = plotting_data(prob.fluid,z;N=N,p_min=_p_min,nanfix=nanfix)
     
 
     # phase envelope - dew
