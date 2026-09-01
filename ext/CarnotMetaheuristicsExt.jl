@@ -52,6 +52,14 @@ function _build_objective(prob::ORC,param::ThermoCycleParameters)
         end 
     end
 end
+function _build_objective(prob::TranscriticalORC,param::TranscriticalParamters)
+    f = let prob = prob
+        x -> begin
+            η(prob,x,param)
+        end 
+    end
+end
+
 export _build_objective
 function generate_optimization_bounds(prob::HeatPump)
     ΔT_sh_min = 0.0
@@ -122,6 +130,21 @@ function optimize(prob::ORC,
     return x_best,sol_best
 end
 
+
+function optimize(prob::TranscriticalORC,alg::Metaheuristics.AbstractAlgorithm,param::TranscriticalParamters)
+    ℓ = _build_objective(prob,param)
+    # generate box 
+    lb,ub = generate_box(prob,param)
+    bounds = Metaheuristics.boxconstraints(lb = lb, ub = ub)
+    opt_result = Metaheuristics.optimize(ℓ,bounds,alg)
+
+    x_best = Metaheuristics.minimizer(opt_result)
+    loss_opt_M = Metaheuristics.minimum(opt_result)
+    Δ,_ = Carnot.F(prob,x_best)
+
+    sol = SolutionState(x_best,opt_result.f_calls,opt_result.iteration,Δ,lb,ub,false,2,NaN,NaN,:transcritical_optimal)
+    return sol,loss_opt_M
+end
 
 export optimize
 

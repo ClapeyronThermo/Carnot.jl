@@ -60,6 +60,10 @@ function show_parameters(sol::SolutionState)
     return nothing
 end
 
+function NaNSolution(lb,ub,autodiff,fd_order)
+    return SolutionState([NaN,NaN],NaN,NaN,[NaN,NaN],lb,ub,autodiff,fd_order,NaN,NaN,:NaNSolution)
+end
+
 function box_projection(x::Array{T,1},lb::Array{TT,1},ub::Array{TTT,1}) where {T <: Real, TT <: Real, TTT <: Real}
     y = copy(x)
     for i in eachindex(x)

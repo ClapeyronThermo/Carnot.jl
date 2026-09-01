@@ -82,6 +82,23 @@ function isentropic_expander(p_in::T1,p_out::T2,η_isen::T3,h_in::T4,z::Abstract
     return h_out::TT
 end
 
+function isentropic_expander_nophase(p_in::T1,p_out::T2,η_isen::T3,h_in::T4,z::AbstractVector{TZ},fluid::EoSModel) where {T1<:Real, T2<:Real, T3<:Real, T4<:Real, TZ<:Real}
+    TT = promote_type(T1, T2, T3, T4, TZ)
+    s_isen = Clapeyron.PH.entropy(fluid, p_in, h_in,z,phase = :gas) ::TT
+    T_isen_out = Tproperty(fluid,p_out,s_isen,z,entropy,phase = :gas)::TT
+    h_isen = enthalpy(fluid,p_out,T_isen_out,z,phase = :gas)::TT
+    h_out = (h_in - (h_in - h_isen) * η_isen) ::TT
+    # force outlet to be gaseous
+    # h_gas = Clapeyron.enthalpy(fluid, p_out, dt, z,phase = :gas)::TT
+    # # @show   values(dt), h_gas, h_out, p_in, p_out
+    # if h_out < h_gas
+    #     # @warn "The outlet enthalpy is below the gas enthalpy. Adjusting to gas phase."
+    #     h_out = h_gas
+    # end
+
+    return h_out::TT
+end
+
 
 """
 Computes the heat transfer in the recuperator. Assumes fluid entering from the left to be higher in temperature. Based over ϵ - effictiveness of heat exchanger. 
@@ -96,18 +113,6 @@ function IHEX_Q(fluid::EoSModel,ϵ::T1,T_in_left::T2,p_in_left::T3,T_in_right::T
     Q = Qmax*ϵ
     return Q
 end
-
-"""
-Computes the glide match coefficient for a given thermodynamic problem and solution state.
-"""
-function glide_match_coeff(prob::ThermoCycleProblem,sol::SolutionState;N::Int = 20)
- 
-end
-
-function glide_match_val(wf::AbstractVector,sf::AbstractVector)
-
-end
-
 
 
 compute_isentropic_exponent(fluid::EoSModel,p,T,z) = Clapeyron.adiabatic_index(fluid,p_ref,T_ref,z)
