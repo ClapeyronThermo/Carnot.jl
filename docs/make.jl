@@ -11,7 +11,7 @@ makedocs(
     pages = [
         "Home" => "index.md",
         "Examples" => "examples.md",
-        "Trancritical ORC" => "transcritical.md",
+        "Transcritical ORC" => "transcritical.md",
         "Optimization" => "optimization.md",
         "References" => "reference.md",
     ],
