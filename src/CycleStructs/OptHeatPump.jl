@@ -1,3 +1,23 @@
+""" OptHeatPump{E<:EoSModel,T<:Real,Z<:AbstractVector{T}} <: ThermoCycleProblem 
+
+Thermodynamic optimisation problem for a heat pump. 
+    
+    # Fields 
+    - `fluid::E`: Equation-of-state model describing the working fluid. 
+    - `z::Z`: Composition vector of the working fluid. 
+    - `T_evap_in::T`: Inlet temperature of the evaporator. 
+    - `T_evap_out::T`: Outlet temperature of the evaporator. 
+    - `T_cond_in::T`: Inlet temperature of the condenser. 
+    - `T_cond_out::T`: Outlet temperature of the condenser. 
+    - `η_comp::T`: Isentropic efficiency of the compressor. 
+    - `pp_evap::T`: Minimum pinch-point temperature difference in the evaporator. 
+    - `pp_cond::T`: Minimum pinch-point temperature difference in the condenser. 
+    - `crit::NTuple{3,T}`: Critical properties of the working fluid, typically `(T_crit, p_crit, ρ_crit)`. 
+    # Type Parameters 
+    - `E`: Type of the equation-of-state model. 
+    - `T`: Numeric type used for temperatures and other scalar parameters. 
+    - `Z`: Type of the composition vector. 
+    """
 mutable struct OptHeatPump{E<:EoSModel,T<:Real,Z<:AbstractVector{T}} <: ThermoCycleProblem
     fluid::E
     z::Z
@@ -17,6 +37,21 @@ struct DirectOptParameters{T<:Real}
     ΔT_sc_min::T
 end
 
+
+""" 
+    DirectOptParameters(; N::Int, ΔT_sh_min, ΔT_sc_min) 
+    
+    Parameters controlling the discretisation and minimum temperature differences used in the direct heat-pump optimisation. 
+    
+    # Arguments 
+    - `N::Int`: Number of discretisation points used in the direct optimisation. Must be greater than 1. 
+    - `ΔT_sh_min`: Minimum allowable superheat temperature difference. Must be non-negative. 
+    - `ΔT_sc_min`: Minimum allowable subcooling temperature difference. Must be non-negative. 
+    # Returns A `DirectOptParameters` instance containing the specified optimisation parameters. 
+    # Throws - `AssertionError`: If `N ≤ 1`. 
+    - `AssertionError`: If `ΔT_sh_min < 0`. 
+    - `AssertionError`: If `ΔT_sc_min < 0`. 
+    """
 function DirectOptParameters(;N::Int, ΔT_sh_min, ΔT_sc_min)
     @assert N > 1 "N must be greater than 1"
     @assert ΔT_sh_min >= 0 "Minimum superheat temperature must be non-negative"
@@ -137,6 +172,28 @@ function F_pure(prob::OptHeatPump{E,T,Z},x::AbstractVector{T2}) where {E,T,Z,T2<
     return [ΔT_cond,ΔT_evap], cop
 end
 
+
+""" 
+    F(prob::OptHeatPump, x::AbstractVector{T}; N::Int) where {T<:Real} 
+    
+    Evaluate the heat-pump optimisation problem for a given set of decision variables. 
+    The decision vector `x` contains the evaporating pressure, condensing pressure, superheat, and subcooling. 
+    For mixtures, the function evaluates the evaporator and condenser pinch-point constraints using a discretised heat-exchanger model. 
+    For pure fluids, the calculation is delegated to [`F_pure`](@ref). 
+    
+    # Arguments 
+    - `prob::OptHeatPump`: Heat-pump optimisation problem. 
+    - `x::AbstractVector{T}`: Decision vector of length 4: 
+        - `x[1]`: Evaporating pressure, normalised by 1 atm. 
+        - `x[2]`: Condensing pressure, normalised by 1 atm. 
+        - `x[3]`: Superheat temperature difference. 
+        - `x[4]`: Subcooling temperature difference. 
+    - `N::Int`: Number of discretisation points used to evaluate the evaporator and condenser pinch points. 
+    # Returns A tuple `(constraints, cop)` where: 
+        - `constraints`: Two-element vector containing the evaporator and condenser pinch-point constraint residuals, `[ΔTpp_evap, ΔTpp_cond]`. A non-negative value indicates that the corresponding minimum pinch-point temperature difference constraint is satisfied. 
+        - `cop`: Coefficient of performance of the heat pump, calculated as `(h_cond_out - h_comp_out) / (h_comp_out - h_evap_out)`. 
+    # Notes For mixtures, the heat-exchanger temperature profiles are discretised using linear enthalpy spacing. The minimum temperature difference between the working-fluid and secondary-fluid profiles is used to evaluate each pinch-point constraint. The pressures in `x` are expressed relative to atmospheric pressure: `p = x[i] * 101325`. 
+    """
 function F(prob::OptHeatPump, x::AbstractVector{T}; N::Int) where {T<:Real}
     @assert length(x) == 4 "x must be a vector of length 4"
 
@@ -239,6 +296,27 @@ function COP(prob::OptHeatPump,x::AbstractVector)
     end
 end
 
+
+""" 
+    convert_solution(prob::OptHeatPump, sol::SolutionState) 
+    
+    Convert an optimised `OptHeatPump` solution into a `HeatPump` problem and solve the resulting thermodynamic cycle. 
+    The pressure-related decision variables from the optimisation solution are used by the `HeatPump` solver, 
+    while the superheat and subcooling values are passed explicitly to the `HeatPump` constructor. 
+        
+    # Arguments 
+    - `prob::OptHeatPump`: Heat-pump optimisation problem. 
+    - `sol::SolutionState`: Optimisation solution containing the four decision variables `[p_evap, p_cond, ΔT_sh, ΔT_sc]`. 
+    
+    # Returns A tuple `(hp, sol)` where: 
+    - `hp`: Constructed `HeatPump` problem corresponding to the optimised solution. 
+    - `sol`: Solution obtained by solving the constructed `HeatPump` problem. 
+    
+    # Throws - `AssertionError`: If `sol.x` does not contain exactly four decision variables. 
+    
+    # Notes 
+    The returned `SolutionState` is the result of re-solving the `HeatPump` problem using `ThermoCycleParameters(N = 20, autodiff = false, max_iters = 10)`. 
+    """
 function convert_solution(prob::OptHeatPump,sol::SolutionState)
     @assert length(sol.x) == 4 "Solution vector must be of length 4"
     hp = HeatPump(
