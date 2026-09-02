@@ -127,6 +127,8 @@ The `HeatPump` cycle before optimization had a COP of `-3.23`
 After optimization of superheating and subcooling temperatures the COP is `-4.14`
 ![hp_opt](Images/opt_hp.png)
 
+
+
 To the above optimization utilizes the non-linear solving of pinch point solving. There is a way to get the optimal solution without utilizing the NL solver. 
 
 ```julia
