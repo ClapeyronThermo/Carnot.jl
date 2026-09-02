@@ -28,6 +28,8 @@ include("DataMap/DataMap.jl")
 include("CycleStructs/ORC.jl")
 include("CycleStructs/HeatPump.jl")
 include("CycleStructs/TranscriticalORC.jl")
+include("CycleStructs/OptHeatPump.jl")
+
 #solve
 include("Solve/solve.jl")
 

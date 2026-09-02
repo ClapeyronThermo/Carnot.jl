@@ -146,6 +146,33 @@ function optimize(prob::TranscriticalORC,alg::Metaheuristics.AbstractAlgorithm,p
     return sol,loss_opt_M
 end
 
+
+function _build_objective(prob::OptHeatPump)
+    f = let prob = prob
+        x -> begin
+            COP(prob,x)
+        end 
+    end
+end
+
+function optimize(prob::OptHeatPump,alg::Metaheuristics.AbstractAlgorithm,param::DirectOptParameters)
+    @info "Building objective function..."
+    @time ℓ = _build_objective(prob)
+    @info "Objective function built."
+    # generate box 
+    @info "Generating box constraints..."
+    lb,ub = generate_box(prob,param)
+    bounds = Metaheuristics.boxconstraints(lb = lb, ub = ub)
+    opt_result = Metaheuristics.optimize(ℓ,bounds,alg)
+    x_best = Metaheuristics.minimizer(opt_result)
+    loss_opt_M = Metaheuristics.minimum(opt_result)
+    Δ,_ = Carnot.F(prob,x_best, N = 20)
+
+    sol = SolutionState(x_best,opt_result.f_calls,opt_result.iteration,Δ,lb,ub,false,2,NaN,NaN,:optimal_no_solve_solution)
+    return sol,loss_opt_M
+end
+
+
 export optimize
 
 
