@@ -135,7 +135,7 @@ struct TranscriticalParamters
 end
 
 """
-    F(prob::TranscriticalORC, x::AbstractVector; N::Int = 20)
+    F(prob::TranscriticalORC, x::AbstractVector; N::Int)
 
 Evaluate the evaporator and condenser pinch-point constraints and the thermal
 efficiency of a transcritical Organic Rankine Cycle (ORC).
@@ -184,7 +184,7 @@ The evaporator outlet temperature is defined relative to the critical
 temperature of the working fluid, while the condenser outlet temperature is
 defined relative to the saturation temperature at the condensation pressure.
 """
-function F(prob::TranscriticalORC,x::AbstractVector;N::Int = 20)
+function F(prob::TranscriticalORC,x::AbstractVector;N::Int)
     T_crit,p_crit,_ = crit_pure(prob.fluid)
     p_evap = x[1]*p_crit
     p_cond = x[2]*101325;

@@ -132,7 +132,7 @@ function generate_box_solve_bounds(prob::ORC)
     end
     if prob.T_evap_out > Tcrit 
         throw(error("For now we handel subcritical ORC. The outlet temperature of the evap : 
-        $(prob.T_evap) is higher than critical temperature of the fluid $Tcrit, this will not allow to meet the pinch points.
+        $(prob.T_evap_out) is higher than critical temperature of the fluid $Tcrit, this will not allow to meet the pinch points.
         "))
     end
     psat_min_evap = dew_pressure(prob.fluid,prob.T_evap_out - prob.pp_evap- prob.ΔT_sh,prob.z)[1]

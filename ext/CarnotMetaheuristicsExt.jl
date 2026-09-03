@@ -66,7 +66,7 @@ function _build_objective(
     prob::ORC,
     param::ThermoCycleParameters,
     algo::Metaheuristics.AbstractAlgorithm,
-)
+    )   
 
     if algo.options.parallel_evaluation
         return let prob = prob, param = param
@@ -91,7 +91,7 @@ function _build_objective(
     prob::TranscriticalORC,
     param::TranscriticalParamters,
     algo::Metaheuristics.AbstractAlgorithm,
-)
+    )
 
     if algo.options.parallel_evaluation
         return let prob = prob, param = param
@@ -108,6 +108,32 @@ function _build_objective(
     else
         return let prob = prob, param = param
             x -> η(prob, x, param)
+        end
+    end
+end
+
+
+function _build_objective(
+    prob::HeatPumpTranscritical,
+    param::TranscriticalParamters,
+    algo::Metaheuristics.AbstractAlgorithm,
+    )
+
+    if algo.options.parallel_evaluation
+        return let prob = prob, param = param
+            X -> begin
+                fitness = zeros(size(X, 1))
+
+                Threads.@threads for i in axes(X, 1)
+                    fitness[i] = COP(prob, X[i, :], param)
+                end
+
+                fitness
+            end
+        end
+    else
+        return let prob = prob, param = param
+            x -> COP(prob, x, param)
         end
     end
 end
@@ -192,18 +218,33 @@ function optimize(prob::TranscriticalORC,alg::Metaheuristics.AbstractAlgorithm,p
 
     x_best = Metaheuristics.minimizer(opt_result)
     loss_opt_M = Metaheuristics.minimum(opt_result)
-    Δ,_ = Carnot.F(prob,x_best)
+    Δ,_ = Carnot.F(prob,x_best, N = param.N)
 
-    sol = SolutionState(x_best,opt_result.f_calls,opt_result.iteration,Δ,lb,ub,false,2,NaN,NaN,:transcritical_optimal)
+    sol = SolutionState(x_best,opt_result.f_calls,opt_result.iteration,Δ,lb,ub,false,2,nothing,nothing,:transcritical_optimal)
     return sol,loss_opt_M
 end
 
+
+function optimize(prob::HeatPumpTranscritical,alg::Metaheuristics.AbstractAlgorithm,param::TranscriticalParamters)
+    ℓ = _build_objective(prob,param,alg)
+    # generate box 
+    lb,ub = generate_box(prob,param)
+    bounds = Metaheuristics.boxconstraints(lb = lb, ub = ub)
+    opt_result = Metaheuristics.optimize(ℓ,bounds,alg)
+
+    x_best = Metaheuristics.minimizer(opt_result)
+    loss_opt_M = Metaheuristics.minimum(opt_result)
+    Δ,_ = Carnot.F(prob,x_best, N = param.N)
+
+    sol = SolutionState(x_best,opt_result.f_calls,opt_result.iteration,Δ,lb,ub,false,2,nothing,nothing,:transcritical_optimal)
+    return sol,loss_opt_M
+end
 
 function _build_objective(
     prob::OptHeatPump,
     param::DirectOptParameters,
     algo::Metaheuristics.AbstractAlgorithm,
-)
+    )
 
     f = let prob = prob, param = param
         x -> COP(prob, x, param)
@@ -242,7 +283,7 @@ function optimize(prob::OptHeatPump,alg::Metaheuristics.AbstractAlgorithm,param:
     loss_opt_M = Metaheuristics.minimum(opt_result)
     Δ,_ = Carnot.F(prob,x_best, N = 20)
 
-    sol = SolutionState(x_best,opt_result.f_calls,opt_result.iteration,Δ,lb,ub,false,2,NaN,NaN,:optimal_no_solve_solution)
+    sol = SolutionState(x_best,opt_result.f_calls,opt_result.iteration,Δ,lb,ub,false,2,nothing,nothing,:optimal_no_solve_solution)
     return sol,loss_opt_M
 end
 
