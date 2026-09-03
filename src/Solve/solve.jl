@@ -77,17 +77,6 @@ function generate_initial_point(prob::HeatPumpVarEff,lb::AbstractVector{T},ub::A
     end       
 end
 
-function generate_initial_point(prob::HeatPumpTranscritical,lb::AbstractVector{T},ub::AbstractVector{T},x0_init::Symbol) where T<: Real
-    if x0_init == :default
-        return [
-            minimum(lb), maximum(ub)
-        ]
-    end
-    if x0_init == :average 
-        return @error "not implemented"
-    end       
-end
-
 
 """
 `generate_box_solve_bounds(prob::HeatPump) -> lb, ub`
@@ -120,20 +109,7 @@ function generate_box_solve_bounds(prob::HeatPump)
 end
 
 
-function generate_box_solve_bounds(prob::HeatPumpTranscritical)
-    #Tcrit,pcrit,_ = crit_mix(prob.fluid, prob.z)
-    psat_min_evap = dew_pressure(prob.fluid,prob.T_evap_out - prob.pp_evap - prob.ΔT_sh,prob.z)[1]
-    psat_max_evap = bubble_pressure(prob.fluid,prob.T_evap_in ,prob.z)[1]
 
-    p_cond_min = 1.0 
-    p_cond_max = 2.0
-
-    lb = zeros(eltype(prob.z), 2)
-    ub = zeros(eltype(prob.z), 2)
-    lb[1] = psat_min_evap./101325; lb[2]= p_cond_min
-    ub[1] = psat_max_evap ./101325; ub[2] = p_cond_max
-    return lb, ub
-end
 
 """
 `generate_box_solve_bounds(prob::HeatPumpRecuperator) -> lb, ub`
@@ -324,10 +300,6 @@ function solve_ad(prob::ThermoCycleProblem,lb::AbstractVector,ub::AbstractVector
     sol = constrained_newton_ad(f, x0, lb, ub; xtol = xtol, ftol = ftol, max_iters = max_iters,verbose = verbose)
     sol.soltype = :subcritical
     if norm(sol.residuals)  > restart_TOL
-        # f(x::AbstractVector{T}) where {T<:Real} = F_transcritical(prob, x,N = N)
-        # x0 = generate_bounds(prob,lb,ub)
-        # sol = constrained_newton_ad(f, x0, lb, ub; xtol = xtol, ftol = ftol, max_iters = max_iters)
-        # sol.soltype = :transcritical
         x0_init = switch_x0(x0_init)
         x0 = generate_initial_point(prob,lb,ub,x0_init)
         sol = constrained_newton_ad(f, x0, lb, ub; xtol = xtol, ftol = ftol, max_iters = max_iters) 
