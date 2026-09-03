@@ -8,7 +8,7 @@ import Carnot: optimize
 function _build_residual(prob::HeatPump, N::Int)
     f = let prob = prob, N = N
         x -> begin 
-            nc = length(prob.fluid.components)
+            nc = length(prob.fluid.components)s
             return nc == 1 ? F_pure(prob, x) : F(prob, x, N = N)
         end
     end
@@ -38,25 +38,77 @@ function objective(prob::ORC,param::ThermoCycleParameters,x::AbstractVector)
     end
 end
 
-function _build_objective(prob::HeatPump,param::ThermoCycleParameters)
-    f = let prob = prob
-        x -> begin
-            objective(prob,param,x)
-        end 
+function _build_objective(
+    prob::HeatPump,
+    param::ThermoCycleParameters,
+    algo::Metaheuristics.AbstractAlgorithm,
+)
+
+    if algo.options.parallel_evaluation
+        return let prob = prob, param = param
+            X -> begin
+                fitness = zeros(size(X, 1))
+
+                Threads.@threads for i in axes(X, 1)
+                    fitness[i] = objective(prob, param, X[i, :])
+                end
+
+                fitness
+            end
+        end
+    else
+        return let prob = prob, param = param
+            x -> objective(prob, param, x)
+        end
     end
 end
-function _build_objective(prob::ORC,param::ThermoCycleParameters)
-    f = let prob = prob
-        x -> begin
-            objective(prob,param,x)
-        end 
+function _build_objective(
+    prob::ORC,
+    param::ThermoCycleParameters,
+    algo::Metaheuristics.AbstractAlgorithm,
+)
+
+    if algo.options.parallel_evaluation
+        return let prob = prob, param = param
+            X -> begin
+                fitness = zeros(size(X, 1))
+
+                Threads.@threads for i in axes(X, 1)
+                    fitness[i] = objective(prob, param, X[i, :])
+                end
+
+                fitness
+            end
+        end
+    else
+        return let prob = prob, param = param
+            x -> objective(prob, param, x)
+        end
     end
 end
-function _build_objective(prob::TranscriticalORC,param::TranscriticalParamters)
-    f = let prob = prob
-        x -> begin
-            η(prob,x,param)
-        end 
+
+function _build_objective(
+    prob::TranscriticalORC,
+    param::TranscriticalParamters,
+    algo::Metaheuristics.AbstractAlgorithm,
+)
+
+    if algo.options.parallel_evaluation
+        return let prob = prob, param = param
+            X -> begin
+                fitness = zeros(size(X, 1))
+
+                Threads.@threads for i in axes(X, 1)
+                    fitness[i] = η(prob, X[i, :], param)
+                end
+
+                fitness
+            end
+        end
+    else
+        return let prob = prob, param = param
+            x -> η(prob, x, param)
+        end
     end
 end
 
@@ -86,7 +138,7 @@ function optimize(prob::HeatPump,
     alg::Metaheuristics.AbstractAlgorithm,param::ThermoCycleParameters)
 
     @time "Building Objective function..." begin
-    ℓ = _build_objective(prob,param)
+    ℓ = _build_objective(prob,param,alg)
     end
     @time "Generating bounds ..." begin
     lb,ub = generate_optimization_bounds(prob)
@@ -110,7 +162,7 @@ function optimize(prob::ORC,
     alg::Metaheuristics.AbstractAlgorithm,param::ThermoCycleParameters)
 
     @time "Building Objective function..." begin
-    ℓ = _build_objective(prob,param)
+    ℓ = _build_objective(prob,param,alg)
     end
     @time "Generating bounds ..." begin
     lb,ub = generate_optimization_bounds(prob)
@@ -132,7 +184,7 @@ end
 
 
 function optimize(prob::TranscriticalORC,alg::Metaheuristics.AbstractAlgorithm,param::TranscriticalParamters)
-    ℓ = _build_objective(prob,param)
+    ℓ = _build_objective(prob,param,alg)
     # generate box 
     lb,ub = generate_box(prob,param)
     bounds = Metaheuristics.boxconstraints(lb = lb, ub = ub)
@@ -147,17 +199,39 @@ function optimize(prob::TranscriticalORC,alg::Metaheuristics.AbstractAlgorithm,p
 end
 
 
-function _build_objective(prob::OptHeatPump)
-    f = let prob = prob
-        x -> begin
-            COP(prob,x)
-        end 
+function _build_objective(
+    prob::OptHeatPump,
+    param::DirectOptParameters,
+    algo::Metaheuristics.AbstractAlgorithm,
+)
+
+    f = let prob = prob, param = param
+        x -> COP(prob, x, param)
     end
+
+    if algo.options.parallel_evaluation
+
+        f_parallel = let f = f
+            X -> begin
+                fitness = zeros(size(X, 1))
+
+                Threads.@threads for i in axes(X, 1)
+                    fitness[i] = f(X[i, :])
+                end
+
+                fitness
+            end
+        end
+
+        return f_parallel
+    end
+
+    return f
 end
 
 function optimize(prob::OptHeatPump,alg::Metaheuristics.AbstractAlgorithm,param::DirectOptParameters)
     @info "Building objective function..."
-    @time ℓ = _build_objective(prob)
+    @time ℓ = _build_objective(prob,param,alg)
     @info "Objective function built."
     # generate box 
     @info "Generating box constraints..."
