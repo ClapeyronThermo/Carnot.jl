@@ -126,3 +126,43 @@ The `HeatPump` cycle before optimization had a COP of `-3.23`
 
 After optimization of superheating and subcooling temperatures the COP is `-4.14`
 ![hp_opt](Images/opt_hp.png)
+
+
+
+To the above optimization utilizes the non-linear solving of pinch point solving. There is a way to get the optimal solution without utilizing the NL solver. 
+
+```julia
+using Carnot, Clapeyron, Metaheuristics
+
+fluid = cPR(["propane"], idealmodel = ReidIdeal)
+hp = OptHeatPump(
+    fluid = fluid,
+    z = [1.0],
+    T_evap_in = 273.15 + 15, # K
+    T_evap_out = 273.15 + 0, # K
+    T_cond_in = 273.15 + 20, # K
+    T_cond_out = 273.15 + 45, # K
+    η_comp = 0.8,
+    pp_evap = 5, # K
+    pp_cond = 5, # K
+)
+param = DirectOptParameters(N = 20, ΔT_sh_min = 3.0, ΔT_sc_min = 3.0)
+
+@show check_feasibility(hp, [1.00, 15.5, 5.0, 5.0]; N=10)
+
+options = Metaheuristics.Options(
+    f_tol_rel = 1e-2,
+    f_tol = 1e-2,
+    f_calls_limit = 100000,
+    parallel_evaluation = false,
+    verbose = true
+)
+
+algo = ECA(options = options, N = 150)
+sol,cop_opt = Carnot.optimize(hp,algo,param)
+
+
+hp_converted ,sol_converted = convert_solution(hp,sol)
+```
+
+the `convert_solution` returns the generic heat pump struct as above. 
