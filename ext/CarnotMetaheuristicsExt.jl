@@ -220,7 +220,7 @@ function optimize(prob::TranscriticalORC,alg::Metaheuristics.AbstractAlgorithm,p
     loss_opt_M = Metaheuristics.minimum(opt_result)
     Δ,_ = Carnot.F(prob,x_best, N = param.N)
 
-    sol = SolutionState(x_best,opt_result.f_calls,opt_result.iteration,Δ,lb,ub,false,2,nothing,nothing,:transcritical_optimal)
+    sol = SolutionState(x_best,opt_result.f_calls,opt_result.iteration,Δ,lb,ub,false,2,NaN,NaN,:transcritical_optimal)
     return sol,loss_opt_M
 end
 
@@ -236,7 +236,7 @@ function optimize(prob::HeatPumpTranscritical,alg::Metaheuristics.AbstractAlgori
     loss_opt_M = Metaheuristics.minimum(opt_result)
     Δ,_ = Carnot.F(prob,x_best, N = param.N)
 
-    sol = SolutionState(x_best,opt_result.f_calls,opt_result.iteration,Δ,lb,ub,false,2,nothing,nothing,:transcritical_optimal)
+    sol = SolutionState(x_best,opt_result.f_calls,opt_result.iteration,Δ,lb,ub,false,2,NaN,NaN,:transcritical_optimal)
     return sol,loss_opt_M
 end
 
@@ -283,7 +283,7 @@ function optimize(prob::OptHeatPump,alg::Metaheuristics.AbstractAlgorithm,param:
     loss_opt_M = Metaheuristics.minimum(opt_result)
     Δ,_ = Carnot.F(prob,x_best, N = 20)
 
-    sol = SolutionState(x_best,opt_result.f_calls,opt_result.iteration,Δ,lb,ub,false,2,nothing,nothing,:optimal_no_solve_solution)
+    sol = SolutionState(x_best,opt_result.f_calls,opt_result.iteration,Δ,lb,ub,false,2,NaN,NaN,:optimal_no_solve_solution)
     return sol,loss_opt_M
 end
 
