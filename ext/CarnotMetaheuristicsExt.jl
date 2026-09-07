@@ -240,12 +240,12 @@ end
 function optimize(prob::HeatPump,
     alg::Metaheuristics.AbstractAlgorithm,param::ThermoCycleParameters,minbounds::TemperatureMinimumBounds)
 
-    @time "Building Objective function..." begin
+
     ℓ = _build_objective(prob,param,alg)
-    end
-    @time "Generating bounds ..." begin
+
+
     lb,ub = generate_optimization_bounds(prob,minbounds)
-    end
+ 
     bounds = Metaheuristics.boxconstraints(lb = lb, ub = ub)
     opt_result = Metaheuristics.optimize(ℓ,bounds,alg)
     
@@ -264,12 +264,12 @@ end
 function optimize(prob::HeatPumpRecuperator,
     alg::Metaheuristics.AbstractAlgorithm,param::ThermoCycleParameters,minbounds::TemperatureMinimumBounds)
 
-    @time "Building Objective function..." begin
+
     ℓ = _build_objective(prob,param,alg)
-    end
-    @time "Generating bounds ..." begin
+
+   
     lb,ub = generate_optimization_bounds(prob.hp,minbounds)
-    end
+    
     bounds = Metaheuristics.boxconstraints(lb = lb, ub = ub)
     opt_result = Metaheuristics.optimize(ℓ,bounds,alg)
     
@@ -290,12 +290,12 @@ end
 function optimize(prob::ORC,
     alg::Metaheuristics.AbstractAlgorithm,param::ThermoCycleParameters,minbounds::TemperatureMinimumBounds)
 
-    @time "Building Objective function..." begin
+    
     ℓ = _build_objective(prob,param,alg)
-    end
-    @time "Generating bounds ..." begin
+   
+    
     lb,ub = generate_optimization_bounds(prob,minbounds)
-    end
+  
     bounds = Metaheuristics.boxconstraints(lb = lb, ub = ub)
     opt_result = Metaheuristics.optimize(ℓ,bounds,alg)
     
@@ -314,12 +314,12 @@ end
 function optimize(prob::ORCEconomizer,
     alg::Metaheuristics.AbstractAlgorithm,param::ThermoCycleParameters,minbounds::TemperatureMinimumBounds)
 
-    @time "Building Objective function..." begin
+   
     ℓ = _build_objective(prob,param,alg)
-    end
-    @time "Generating bounds ..." begin
+   
+  
     lb,ub = generate_optimization_bounds(prob.orc,minbounds)
-    end
+   
     bounds = Metaheuristics.boxconstraints(lb = lb, ub = ub)
     opt_result = Metaheuristics.optimize(ℓ,bounds,alg)
     
@@ -398,11 +398,7 @@ function _build_objective(
 end
 
 function optimize(prob::OptHeatPump,alg::Metaheuristics.AbstractAlgorithm,param::DirectOptParameters)
-    @info "Building objective function..."
-    @time ℓ = _build_objective(prob,param,alg)
-    @info "Objective function built."
-    # generate box 
-    @info "Generating box constraints..."
+    ℓ = _build_objective(prob,param,alg)
     lb,ub = generate_box(prob,param)
     bounds = Metaheuristics.boxconstraints(lb = lb, ub = ub)
     opt_result = Metaheuristics.optimize(ℓ,bounds,alg)
