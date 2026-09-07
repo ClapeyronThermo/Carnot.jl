@@ -235,7 +235,10 @@ end
 function η(prob::TranscriticalORC,x::AbstractVector,param::TranscriticalParamters)
     @assert length(x) == 4 "Not pinch point solver only"
     # if residues not met return 0 
-    residue,η_orc = F(prob,x,N = param.N)
+    residue,η_orc = try F(prob,x,N = param.N)
+    catch
+        return 0.0
+    end
     if residue[1] < 0
         return 0.0
     end

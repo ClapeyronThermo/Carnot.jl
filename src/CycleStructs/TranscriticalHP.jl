@@ -127,7 +127,10 @@ end
 
 
 function COP(prob::HeatPumpTranscritical,x::AbstractVector,param::TranscriticalParamters)
-    residue, cop = F(prob,x,N = param.N)
+    residue, cop = try F(prob,x,N = param.N)
+    catch
+        return 0.0
+    end
     if residue[1] < 0
         return 0.0
     end

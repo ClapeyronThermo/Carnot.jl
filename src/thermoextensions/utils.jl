@@ -152,3 +152,15 @@ end
 
 export off_design_compressor_relation, compute_isentropic_exponent
 export off_design_expander_relation
+
+
+struct TemperatureMinimumBounds
+    ΔT_sh_min::Float64
+    ΔT_sc_min::Float64
+end
+
+function TemperatureMinimumBounds(;ΔT_sh_min,ΔT_sc_min)
+    return TemperatureMinimumBounds(ΔT_sh_min, ΔT_sc_min)
+end
+
+export TemperatureMinimumBounds
