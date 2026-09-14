@@ -287,8 +287,8 @@ function generate_box(prob::OptHeatPump,param::DirectOptParameters)
     return lb, ub
 end
 
-function COP(prob::OptHeatPump,x::AbstractVector)
-    feasible, _, cop = check_feasibility(prob,x;N=10)
+function COP(prob::OptHeatPump,x::AbstractVector,param::DirectOptParameters)
+    feasible, _, cop = check_feasibility(prob,x;N=param.N)
     if feasible
         return cop
     else
