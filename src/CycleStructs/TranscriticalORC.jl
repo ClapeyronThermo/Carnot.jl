@@ -193,10 +193,16 @@ function F(prob::TranscriticalORC,x::AbstractVector;N::Int)
 
     z = [1.0]
 
+    # TODO: If x[1] < 1 --> Return subcritical ORC solution? This can allow moving between both thermo regiems. 
+    if x[1] < 1
+        return F_switch_subcritical(prob,x,N = N)
+    end
+
     T_cond_out = saturation_temperature(prob.fluid,p_cond)[1] - ΔT_sc
     h_cond_out = enthalpy(prob.fluid,p_cond,T_cond_out,z)
     
     h_pump_out = isentropic_pump(p_cond,p_evap,prob.η_pump,h_cond_out,z,prob.fluid)
+
 
     T_evap_out = ΔT_sh + T_crit
     h_evap_out = enthalpy(prob.fluid,p_evap,T_evap_out,z)
@@ -232,13 +238,52 @@ function F(prob::TranscriticalORC,x::AbstractVector;N::Int)
     return [Δevap,Δcond],η_orc
 end
 
+
+function F_switch_subcritical(prob::TranscriticalORC,x::AbstractVector{T};N::Int) where T<:Real
+    Tcrit,pcrit,_ = crit_pure(prob.fluid)
+    p_evap = x[1]*pcrit
+    p_cond = x[2] * 101325 # convert to Pa
+    z = [1.0]
+    T_evap_out = Clapeyron.saturation_temperature(prob.fluid, p_evap)[1] + x[3]
+    h_evap_out = Clapeyron.enthalpy(prob.fluid, p_evap, T_evap_out, z)
+    h_exp_in = h_evap_out;
+    h_exp_out = Carnot.isentropic_expander(p_evap, p_cond, prob.η_expander, h_exp_in, z, prob.fluid)
+    h_cond_in = h_exp_out
+    T_cond_out = Clapeyron.saturation_temperature(prob.fluid, p_cond)[1] - x[4]
+    h_cond_out = Clapeyron.enthalpy(prob.fluid, p_cond, T_cond_out, z)
+    T_cond_sat = Clapeyron.saturation_temperature(prob.fluid, p_cond)[1]
+    h_cond_sat_liquid = Clapeyron.enthalpy(prob.fluid,p_cond,T_cond_sat,z,phase = :liquid)
+    h_cond_sat_vapour = Clapeyron.enthalpy(prob.fluid,p_cond,T_cond_sat,z,phase = :vapour)
+    h_cond_array = [h_cond_in,h_cond_sat_vapour,h_cond_sat_liquid,h_cond_out]
+    T_cond_array = Clapeyron.PH.temperature.(prob.fluid,p_cond,h_cond_array,z)
+    T_cond_sf_f(h) = prob.T_cond_out - (h_cond_in - h)*(prob.T_cond_out - prob.T_cond_in)/(h_cond_in - h_cond_out)
+    
+    h_pump_in = h_cond_out
+    h_pump_out = Carnot.isentropic_pump(p_cond, p_evap, prob.η_pump, h_pump_in, z, prob.fluid)
+    h_evap_in = h_pump_out
+    T_evap_sat = Clapeyron.saturation_temperature(prob.fluid, p_evap)[1]
+    h_evap_sat_liquid = Clapeyron.enthalpy(prob.fluid,p_evap,T_evap_sat,z,phase = :liquid)
+    h_evap_sat_vapour = Clapeyron.enthalpy(prob.fluid,p_evap,T_evap_sat,z,phase = :vapour)
+    h_evap_array = collect(range(h_evap_out,h_pump_out,N))#[h_evap_out,h_evap_sat_vapour,h_evap_sat_liquid,h_pump_out]
+    T_evap_array = Clapeyron.PH.temperature.(prob.fluid,p_evap,h_evap_array,z)
+    T_evap_sf_f(h) = prob.T_evap_in - (h_evap_out - h)*(prob.T_evap_in - prob.T_evap_out)/(h_evap_out - h_evap_in)
+
+    ΔT_evap = minimum(T_evap_sf_f.(h_evap_array) .- T_evap_array) - prob.pp_evap
+    ΔT_cond = minimum(T_cond_array .- T_cond_sf_f.(h_cond_array)) - prob.pp_cond
+
+    Δh_exp = h_exp_out - h_evap_out
+    Δh_evap = h_evap_out - h_evap_in
+    Δh_pump = h_pump_out - h_pump_in
+    η_orc = (Δh_exp - Δh_pump)/Δh_evap
+    return [ΔT_evap,ΔT_cond], η_orc
+end
+
+
 function η(prob::TranscriticalORC,x::AbstractVector,param::TranscriticalParamters)
     @assert length(x) == 4 "Not pinch point solver only"
     # if residues not met return 0 
-    residue,η_orc = try F(prob,x,N = param.N)
-    catch
-        return 0.0
-    end
+    residue,η_orc =  F(prob,x,N = param.N)
+
     if residue[1] < 0
         return 0.0
     end
@@ -260,7 +305,7 @@ function generate_box(prob::TranscriticalORC,param::TranscriticalParamters)
     psat_min_cond = saturation_pressure(prob.fluid,prob.T_cond_in + prob.pp_cond + prob.ΔT_sc_min)[1]./101325
     psat_max_cond = saturation_pressure(prob.fluid,prob.T_cond_out + prob.pp_cond + ΔT_sc_max)[1]./101325
 
-    lb = [1.0, psat_min_cond, prob.ΔT_sh_min, prob.ΔT_sc_min]
+    lb = [psat_min_cond/p_crit, psat_min_cond, prob.ΔT_sh_min, prob.ΔT_sc_min]
     ub = [param.p_crit_max_ratio,psat_max_cond,ΔT_sh_max,ΔT_sc_max]
     return lb,ub
 end
