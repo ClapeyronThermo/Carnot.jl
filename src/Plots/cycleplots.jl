@@ -370,7 +370,14 @@ function plotting_data(prob::TranscriticalORC,sol::SolutionState;N = 30, p_min =
 
     # Outlet temperature is defined relative to the critical
     # temperature in the transcritical formulation
-    T_evap_out = T_crit + ΔT_sh
+    T_evap_out = nothing
+    if p_evap >= p_crit
+        T_evap_out = T_crit + ΔT_sh
+    end
+
+    if p_evap < p_crit
+        T_evap_out = Clapeyron.saturation_temperature(prob.fluid,p_evap)[1] + ΔT_sh
+    end
 
     h_evap_out = Clapeyron.enthalpy(
         prob.fluid,
@@ -427,7 +434,6 @@ function plotting_data(prob::TranscriticalORC,sol::SolutionState;N = 30, p_min =
     h_exp_array = f_h.(p_exp_array)
   
     T_exp_array = T_ph.(p_exp_array, h_exp_array)
-
     s_exp_array =
         s_ph.(p_exp_array, h_exp_array) ./ molecular_weight(prob.fluid, z)
 

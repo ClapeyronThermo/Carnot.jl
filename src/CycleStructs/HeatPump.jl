@@ -182,12 +182,14 @@ function F(prob::HeatPump, x::AbstractVector{T}; N::Int) where {T<:Real}
 
     # compressor
     crit = crit_mix!(prob)
+    
     h_comp_out = isentropic_compressor(p_evap, p_cond, prob.η_comp,
                                        h_evap_out, prob.z, prob.fluid, crit)
 
     # condenser outlet
     T_cond_out = Clapeyron.temperature(prob.fluid, flash_res0_cond) - prob.ΔT_sc
     h_cond_out = Clapeyron.enthalpy(prob.fluid, p_cond, T_cond_out, prob.z)
+   
     # ----------------------------------
     # Condenser pinch point
     # ----------------------------------
@@ -205,6 +207,7 @@ function F(prob::HeatPump, x::AbstractVector{T}; N::Int) where {T<:Real}
         end
         Δmin - prob.pp_cond
     end
+  
 
     # ----------------------------------
     # Evaporator pinch point

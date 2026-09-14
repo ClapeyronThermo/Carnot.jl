@@ -345,6 +345,7 @@ function optimize(prob::TranscriticalORC,alg::Metaheuristics.AbstractAlgorithm,p
 
     x_best = Metaheuristics.minimizer(opt_result)
     loss_opt_M = Metaheuristics.minimum(opt_result)
+    # TODO: If loss_opt_M is zero, then we can check for subcritical solution?
     Δ,_ = Carnot.F(prob,x_best, N = param.N)
 
     sol = SolutionState(x_best,opt_result.f_calls,opt_result.iteration,Δ,lb,ub,false,2,NaN,NaN,:transcritical_optimal)
