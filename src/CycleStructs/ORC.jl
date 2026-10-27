@@ -1,6 +1,6 @@
-
+abstract type AbstractORC <: ThermoCycleProblem end
 """
-   ORC{T<:Real} <: ThermoCycleProblem
+   ORC{T<:Real} <: AbstractORC
 
 Defines an Organic Rankine Cycle (ORC) problem with thermodynamic and design 
 parameters specified in Kelvin and dimensionless efficiencies.
@@ -20,7 +20,7 @@ parameters specified in Kelvin and dimensionless efficiencies.
 - `pp_cond::T`: Minimum temperature difference (pinch point) at the condenser [K].
 
 """
-mutable struct ORC{E<:EoSModel,T<:Real,Z<:AbstractVector{T}} <: ThermoCycleProblem
+mutable struct ORC{E<:EoSModel,T<:Real,Z<:AbstractVector{T}} <: AbstractORC
     fluid::E
     z::Z
     T_evap_in::T
@@ -301,7 +301,7 @@ function power_ratings(prob::ORC,sol::SolutionState)
 end
 
 """
-        ORCEconomizer{T<:Real} <: ThermoCycleProblem
+        ORCEconomizer{T<:Real} <: AbstractORC
 
 Defines an Organic Rankine Cycle (ORC) configuration with an economiser (regenerative heat exchanger),
 extending the base `ORC` problem with a specified effectiveness.
@@ -310,7 +310,7 @@ extending the base `ORC` problem with a specified effectiveness.
 - `orc::ORC{T}`: Base ORC system definition containing the thermodynamic parameters.
 - `ϵ::T`: Effectiveness of the economiser (regenerator) [-].
 """
-mutable struct ORCEconomizer{orc_struct<:ORC,T<:Real} <: ThermoCycleProblem
+mutable struct ORCEconomizer{orc_struct<:ORC,T<:Real} <: AbstractORC
     orc::orc_struct
     ϵ::T
 end
@@ -424,13 +424,13 @@ export ORCEconomizer
 
 
 """
-    η(prob::Carnot.ThermoCycleProblem, sol::SolutionState) -> Float64
+    η(prob::Carnot.AbstractORC, sol::SolutionState) -> Float64
 
 Computes the thermal efficiency of a thermodynamic cycle given a problem definition 
 and its corresponding solution state.
 
 # Arguments
-- `prob::Carnot.ThermoCycleProblem`: The thermodynamic cycle problem 
+- `prob::Carnot.AbstractORC`: The thermodynamic cycle problem 
   containing fluid properties, boundary conditions, and component parameters.
 - `sol::SolutionState`: The solution state object containing the converged 
   state variables (`x`), residuals, and convergence information.
@@ -443,7 +443,7 @@ and its corresponding solution state.
 This method acts as a wrapper that extracts the solution vector `x` from 
 `sol` and calls the lower-level `η(prob, x)` implementation.
 """
-function η(prob::Carnot.ThermoCycleProblem,sol::SolutionState)
+function η(prob::Carnot.AbstractORC,sol::SolutionState)
     return η(prob,sol.x)
 end
 
@@ -602,7 +602,7 @@ function get_states(prob::ORCEconomizer, sol::SolutionState)
 end
 
 
-mutable struct ORCVarEff{F<:Function,T<:Real} <: ThermoCycleProblem
+mutable struct ORCVarEff{F<:Function,T<:Real} <: AbstractORC
     fluid::EoSModel
     z::AbstractVector{T}
     T_evap_in::T

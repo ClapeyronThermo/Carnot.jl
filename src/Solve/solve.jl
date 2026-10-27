@@ -142,8 +142,8 @@ function generate_box_solve_bounds(prob::ORC)
     end
     psat_min_cond = dew_pressure(prob.fluid,prob.T_cond_in + prob.pp_cond + prob.ΔT_sc,prob.z)[1]
     psat_max_cond = bubble_pressure(prob.fluid,prob.T_cond_out + prob.pp_cond + prob.ΔT_sc,prob.z)[1]
-    @assert psat_min_cond <= psat_max_cond "Box generation min has to be less than max"
-    @assert psat_min_evap <= psat_max_evap "Box generation min has to be less than max"
+    @assert psat_min_cond <= psat_max_cond "Box generation min has to be less than max, right now min = $psat_min_cond and max = $psat_max_cond"
+    @assert psat_min_evap <= psat_max_evap "Box generation min has to be less than max, right now min = $psat_min_evap and max = $psat_max_evap"
     # psat_min = dew_pressure(prob.fluid,prob.T_cond_in,prob.z)[1]
     # psat_max = bubble_pressure(prob.fluid,prob.T_evap_in - prob.ΔT_sh,prob.z)[1] #pcrit*0.9#dew_pressure(prob.fluid,prob.T_evap_in,prob.z)[1]
     ub[1] = psat_max_evap#dew_pressure(prob.fluid,prob.T_evap_in - prob.pp_evap - prob.ΔT_sh,prob.z)[1] # evaporator pressure

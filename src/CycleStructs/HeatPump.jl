@@ -1,5 +1,7 @@
+abstract type AbstractHeatPump <: ThermoCycleProblem end
+
 """
-    HeatPump{T<:Real} <: ThermoCycleProblem
+    HeatPump{T<:Real} <: AbstractHeatPump
 
 A mutable structure representing a vapour-compression heat pump thermodynamic problem.
 
@@ -19,7 +21,7 @@ A mutable structure representing a vapour-compression heat pump thermodynamic pr
 # Optional arguments
 - `check_subcritical` = true: checks if the input conditions (inlet temperature minus pinch point) are actually below the mixture critical point.
 """
-mutable struct HeatPump{E<:EoSModel,T<:Real,Z<:AbstractVector{T}} <: ThermoCycleProblem
+mutable struct HeatPump{E<:EoSModel,T<:Real,Z<:AbstractVector{T}} <: AbstractHeatPump 
     fluid::E
     z::Z
     T_evap_in::T
@@ -49,7 +51,7 @@ end
 crit_mix!(model::EoSModel,z) = crit_mix(model,z)
 
 function HeatPump(;fluid::EoSModel,z,T_evap_in,T_evap_out,T_cond_in,T_cond_out,η_comp,pp_evap,pp_cond,ΔT_sh,ΔT_sc,check_subcritical = true)
-    @assert fluid isa CubicModel || fluid isa SingleFluid || fluid isa MultiFluid "The type of EOS provided is not supported as of now."
+    #@assert fluid isa CubicModel || fluid isa SingleFluid || fluid isa MultiFluid "The type of EOS provided is not supported as of now."
     #default assertions
     @assert length(z) > 0 "Composition vector z must not be empty"
     @assert length(fluid.components) == length(z) "Composition vector z must match the number of components in the fluid model"
@@ -70,7 +72,7 @@ function HeatPump(;fluid::EoSModel,z,T_evap_in,T_evap_out,T_cond_in,T_cond_out,�
     # inlet temperature of the condensor should be subcritical - pinch point
     if check_subcritical
         T_crit,P_crit,V_crit = crit_mix(fluid,z)
-        @assert T_cond_in < T_crit - pp_cond "Condenser inlet temperature must be less than critical temperature ($Tcrit) minus pinch point ($pp_cond) for the heat pump to function properly"
+        @assert T_cond_in < T_crit - pp_cond "Condenser inlet temperature must be less than critical temperature ($T_crit) minus pinch point ($pp_cond) for the heat pump to function properly"
     else
         T_crit = convert(Base.promote_eltype(fluid,z),-1)
         P_crit,V_crit = T_crit,T_crit
@@ -122,7 +124,7 @@ function COP(prob::HeatPump,sol::AbstractVector{T}) where {T<:Real}
 end
 
 """
-    HeatPumpRecuperator{HP<:HeatPump,T<:Real} <: ThermoCycleProblem
+    HeatPumpRecuperator{HP<:HeatPump,T<:Real} <: AbstractHeatPump
 
 A mutable structure representing a heat pump cycle with an internal recuperator (economiser or heat exchanger) between the discharge and suction sides.
 
@@ -130,7 +132,7 @@ A mutable structure representing a heat pump cycle with an internal recuperator 
 - `hp::HP`: The base heat pump configuration, containing fluid properties and cycle parameters.
 - `ϵ::T`: Effectiveness of the recuperator (dimensionless, typically between 0 and 1).
 """
-mutable struct HeatPumpRecuperator{HP<:HeatPump,T<:Real} <:ThermoCycleProblem
+mutable struct HeatPumpRecuperator{HP<:HeatPump,T<:Real} <: AbstractHeatPump
     hp::HP
     ϵ::T
 end
@@ -172,24 +174,25 @@ function F(prob::HeatPump, x::AbstractVector{T}; N::Int) where {T<:Real}
 
     p_evap = x[1] * 101_325
     p_cond = x[2] * 101_325
-
+    #@show p_cond
     flash_res0_cond = Clapeyron.qp_flash_impl(prob.fluid,0.0, p_cond, prob.z, RRQXFlash(equilibrium=:vle)) 
     flash_res1_evap = Clapeyron.qp_flash_impl(prob.fluid,1.0, p_evap, prob.z, RRQXFlash(equilibrium=:vle))
-    
+    #@show flash_res0_cond
+
     # evaporator outlet
     T_evap_out = Clapeyron.temperature(prob.fluid, flash_res1_evap) + prob.ΔT_sh
     h_evap_out = Clapeyron.enthalpy(prob.fluid, p_evap, T_evap_out, prob.z)
-
+    
     # compressor
     crit = crit_mix!(prob)
     
     h_comp_out = isentropic_compressor(p_evap, p_cond, prob.η_comp,
                                        h_evap_out, prob.z, prob.fluid, crit)
-
+    
     # condenser outlet
     T_cond_out = Clapeyron.temperature(prob.fluid, flash_res0_cond) - prob.ΔT_sc
     h_cond_out = Clapeyron.enthalpy(prob.fluid, p_cond, T_cond_out, prob.z)
-   
+  
     # ----------------------------------
     # Condenser pinch point
     # ----------------------------------
@@ -226,8 +229,7 @@ function F(prob::HeatPump, x::AbstractVector{T}; N::Int) where {T<:Real}
         end
         Δmin - prob.pp_evap
     end
-
-    return SVector(ΔTpp_evap, ΔTpp_cond)  # avoids heap allocations
+    return SVector(ΔTpp_cond,ΔTpp_evap)  # avoids heap allocations
 end
 
 function F_pure(prob::HeatPump{E,T,Z},x::AbstractVector{T2}) where {E,T,Z,T2<:Real}
@@ -469,18 +471,18 @@ function power_ratings(prob::HeatPumpRecuperator,sol::AbstractVector{T}) where T
 end
 
 """
-    COP(prob::Carnot.ThermoCycleProblem, sol::SolutionState) -> Float64
+    COP(prob::Carnot.AbstractHeatPump, sol::SolutionState) -> Float64
 
 Computes the coefficient of performance (COP) of a thermodynamic cycle given the 
 problem definition and its corresponding solution state.
 
 # Arguments
-- `prob::Carnot.ThermoCycleProblem`: The thermodynamic cycle problem 
+- `prob::Carnot.AbstractHeatPump`: The thermodynamic cycle problem 
   containing fluid models, boundary conditions, and component parameters.
 - `sol::SolutionState`: The solution state object containing the converged 
   state variables (`x`), residuals, and convergence information.
 """
-function COP(prob::Carnot.ThermoCycleProblem,sol::SolutionState)
+function COP(prob::Carnot.AbstractHeatPump,sol::SolutionState)
     return COP(prob,sol.x)
 end
 
@@ -521,7 +523,7 @@ function F_super(prob::HeatPump,x::AbstractVector,pcrit::Real,Tcrit::Real;N::Int
 end
 
 
-function power_ratings(prob::ThermoCycleProblem,sol::SolutionState)
+function power_ratings(prob::AbstractHeatPump,sol::SolutionState)
     return power_ratings(prob,sol.x)
 end
 
@@ -603,7 +605,7 @@ function get_states(prob::HeatPump,sol::SolutionState)
     s_cond_out_spec = entropy(prob.fluid,p_cond,T_cond_out,prob.z)./Clapeyron.molecular_weight(prob.fluid,prob.z)
 
     h_valve_out = h_cond_out
-    T_valve_out = Clapeyron.PH.temperature(prob.fluid,p_cond,h_valve_out,prob.z)
+    T_valve_out = Clapeyron.PH.temperature(prob.fluid,p_evap,h_valve_out,prob.z)
     h_valve_out_spec = h_cond_out./Clapeyron.molecular_weight(prob.fluid,prob.z)
     s_valve_out_spec = Clapeyron.PH.entropy(prob.fluid,p_evap,h_valve_out,prob.z)./Clapeyron.molecular_weight(prob.fluid,prob.z)
 
@@ -633,6 +635,8 @@ function get_states(prob::HeatPumpRecuperator,sol::SolutionState)
     h_evap_out_spec = enthalpy(prob.hp.fluid,p_evap,T_evap_out,prob.hp.z)./Clapeyron.molecular_weight(prob.hp.fluid,prob.hp.z)
     s_evap_out_spec = entropy(prob.hp.fluid,p_evap,T_evap_out,prob.hp.z)./Clapeyron.molecular_weight(prob.hp.fluid,prob.hp.z)
 
+    T_cond_out = bubble_temperature(prob.hp.fluid,p_cond,prob.hp.z)[1] - prob.hp.ΔT_sc
+
     q_ihex = Carnot.IHEX_Q(prob.hp.fluid,prob.ϵ,T_cond_out, p_cond, T_evap_out, p_evap, prob.hp.z)
     h_recup_out_comp_end = h_evap_out + q_ihex
     T_recup_out_comp_end = Clapeyron.PH.temperature(prob.hp.fluid,p_evap,h_recup_out_comp_end,prob.hp.z)
@@ -644,7 +648,7 @@ function get_states(prob::HeatPumpRecuperator,sol::SolutionState)
     s_comp_out_spec = entropy(prob.hp.fluid,p_cond,T_comp_out,prob.hp.z)./Clapeyron.molecular_weight(prob.hp.fluid,prob.hp.z)
     h_comp_out_spec = h_comp_out./Clapeyron.molecular_weight(prob.hp.fluid,prob.hp.z)
 
-    T_cond_out = bubble_temperature(prob.hp.fluid,p_cond,prob.hp.z)[1] - prob.hp.ΔT_sc
+
     h_cond_out = enthalpy(prob.hp.fluid,p_cond,T_cond_out,prob.hp.z)
     h_cond_out_spec = enthalpy(prob.hp.fluid,p_cond,T_cond_out,prob.hp.z)./Clapeyron.molecular_weight(prob.hp.fluid,prob.hp.z)
     s_cond_out_spec = entropy(prob.hp.fluid,p_cond,T_cond_out,prob.hp.z)./Clapeyron.molecular_weight(prob.hp.fluid,prob.hp.z)
@@ -680,7 +684,7 @@ function get_states(prob::HeatPumpRecuperator,sol::SolutionState)
 end
 
 
-mutable struct HeatPumpVarEff{E,F<:Function,T<:Real} <: ThermoCycleProblem
+mutable struct HeatPumpVarEff{E,F<:Function,T<:Real} <: AbstractHeatPump
     η_comp::F
     fluid::E
     z::AbstractVector{T}
@@ -839,11 +843,11 @@ function F(prob::HeatPumpVarEff,x::AbstractVector{T};N::Int) where {T<:Real}
     # evaporator outlet
     T_evap_out = Clapeyron.temperature(prob.fluid, flash_res1_evap) + prob.ΔT_sh
     h_evap_out = Clapeyron.enthalpy(prob.fluid, p_evap, T_evap_out, prob.z)
-    T_dew_cond = Clapeyron.temperature(flash_res0_cond)
+    #T_dew_cond = Clapeyron.temperature(flash_res0_cond)
     # compressor
     crit = crit_mix!(prob)
     h_comp_out = isentropic_compressor(p_evap, p_cond, η_val,
-                                       h_evap_out, prob.z, prob.fluid, crit, T_dew_cond)
+                                       h_evap_out, prob.z, prob.fluid, crit)
 
     # condenser outlet
     T_cond_out = Clapeyron.temperature(prob.fluid, flash_res0_cond) - prob.ΔT_sc

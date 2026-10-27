@@ -299,7 +299,7 @@ function generate_box(prob::TranscriticalORC,param::TranscriticalParamters)
     T_crit,p_crit,_ = crit_pure(prob.fluid)
     
     
-    ΔT_sh_max = prob.T_evap_in - T_crit - prob.pp_evap
+    ΔT_sh_max = max(prob.T_evap_in - T_crit - prob.pp_evap,prob.T_evap_in - prob.T_evap_out - prob.pp_evap)
     ΔT_sc_max = prob.T_cond_out - prob.T_cond_in - prob.pp_cond
 
     psat_min_cond = saturation_pressure(prob.fluid,prob.T_cond_in + prob.pp_cond + prob.ΔT_sc_min)[1]./101325
@@ -312,3 +312,180 @@ end
 
 
 export TranscriticalORC, TranscriticalParamters, generate_box, η
+
+
+mutable struct TranscriticalIHEXORC{E<:EoSModel,T<:Real} <: ThermoCycleProblem
+    fluid::E
+    T_evap_in::T
+    T_evap_out::T
+    ΔT_sh_min::T
+    T_cond_in::T
+    T_cond_out::T
+    ΔT_sc_min::T
+    η_pump::T
+    η_expander::T
+    pp_evap::T
+    pp_cond::T
+    ϵ::T
+end
+
+function TranscriticalIHEXORC(;
+    fluid::EoSModel,
+    T_evap_in,
+    T_evap_out,
+    T_cond_in,
+    T_cond_out,
+    η_pump,
+    η_expander,
+    pp_evap,
+    pp_cond,
+    ΔT_sh_min,
+    ΔT_sc_min,
+    ϵ
+    )
+
+    @assert ϵ <= 1 "Internal HEX effectiveness has to be less that or equal to 1."
+    @assert ϵ >= 0 "Internal HEX effectiveness has to be greater that or equal to 0."
+    @assert fluid isa CubicModel || fluid isa SingleFluid || fluid isa MultiFluid "The type of EOS provided is not supported as of now."
+    #default assertions
+    @assert length(fluid.components) == 1 "Trancritical cycle is modelled only for pure fluid models"
+
+    Tcrit,pcrit,_ = crit_pure(fluid)
+    @assert Tcrit < T_evap_in "This is trancritical ORC hence, the inlet secondry fluid temperature has to be more than critical point."
+    # Heat source (secondary fluid) temperature drop
+    @assert T_evap_in > T_evap_out "Evaporator secondary fluid must cool down (T_evap_in > T_evap_out)"
+
+    # Heat sink (secondary fluid) temperature rise
+    @assert T_cond_out > T_cond_in "Condenser secondary fluid must heat up (T_cond_out > T_cond_in)"
+
+    # ORC thermodynamic requirement
+    if T_evap_out <= T_cond_in
+        @warn """
+        Evaporator outlet temperature is below or equal to condenser inlet
+        temperature. This may lead to a non-functional cycle. Hence the
+        condenser inlet temperature is set equal to the evaporator outlet
+        temperature.
+        """
+        T_cond_in = T_evap_out
+    end
+
+    @assert T_evap_out >= T_cond_in "Working fluid evaporation temperature must exceed condensation temperature"
+
+    # Efficiency assertions
+    @assert 0 < η_pump <= 1 "Pump efficiency must be in (0, 1]"
+
+    @assert 0 < η_expander <= 1 "Expander efficiency must be in (0, 1]"
+
+    # Pinch-point assertions
+    @assert pp_evap > 0 "Evaporator pinch point must be positive"
+
+    @assert pp_cond > 0 "Condenser pinch point must be positive"
+
+    # Minimum temperature-difference assertions
+    @assert ΔT_sh_min ≥ 0 "Minimum evaporator superheating temperature must be non-negative"
+
+    @assert ΔT_sc_min ≥ 0 "Minimum condenser subcooling temperature must be non-negative"
+
+    # Promote scalars
+    type_promoted = promote_type(
+        typeof(T_evap_in),
+        typeof(T_evap_out),
+        typeof(T_cond_in),
+        typeof(T_cond_out),
+        typeof(η_pump),
+        typeof(η_expander),
+        typeof(pp_evap),
+        typeof(pp_cond),
+        typeof(ΔT_sh_min),
+        typeof(ΔT_sc_min),
+        typeof(ϵ)
+    )
+
+    T_evap_in_T  = convert(type_promoted, T_evap_in)
+    T_evap_out_T = convert(type_promoted, T_evap_out)
+    T_cond_in_T  = convert(type_promoted, T_cond_in)
+    T_cond_out_T = convert(type_promoted, T_cond_out)
+
+    η_pump_T     = convert(type_promoted, η_pump)
+    η_expander_T = convert(type_promoted, η_expander)
+
+    pp_evap_T = convert(type_promoted, pp_evap)
+    pp_cond_T = convert(type_promoted, pp_cond)
+
+    ΔT_sh_min_T = convert(type_promoted, ΔT_sh_min)
+    ΔT_sc_min_T = convert(type_promoted, ΔT_sc_min)
+
+    ϵ_T = convert(type_promoted, ϵ)
+
+
+    return TranscriticalIHEXORC(
+        fluid,
+        T_evap_in_T,
+        T_evap_out_T,
+        ΔT_sh_min_T,
+        T_cond_in_T,
+        T_cond_out_T,
+        ΔT_sc_min_T,
+        η_pump_T,
+        η_expander_T,
+        pp_evap_T,
+        pp_cond_T,
+        ϵ_T
+    )
+end
+
+
+
+function F(prob::TranscriticalIHEXORC,x::AbstractVector;N::Int)
+    T_crit,p_crit,_ = crit_pure(prob.fluid)
+    p_evap = x[1]*p_crit
+    p_cond = x[2]*101325;
+    ΔT_sh = x[3]
+    ΔT_sc = x[4]
+
+    z = [1.0]
+
+    # TODO: If x[1] < 1 --> Return subcritical ORC solution? This can allow moving between both thermo regiems. 
+    if x[1] < 1
+        return F_switch_subcritical(prob,x,N = N)
+    end
+
+    T_cond_out = saturation_temperature(prob.fluid,p_cond)[1] - ΔT_sc
+    h_cond_out = enthalpy(prob.fluid,p_cond,T_cond_out,z)
+    
+    h_pump_out = isentropic_pump(p_cond,p_evap,prob.η_pump,h_cond_out,z,prob.fluid)
+
+
+    T_evap_out = ΔT_sh + T_crit
+    h_evap_out = enthalpy(prob.fluid,p_evap,T_evap_out,z)
+
+    h_evap_array = collect(range(h_pump_out,h_evap_out,N)) 
+    T_evap_array = similar(h_evap_array)
+    T_evap_sf_array = similar(h_evap_array)
+    Δevap_array = similar(h_evap_array)
+    for i in eachindex(T_evap_array)
+        T_evap_sf_array[i] = prob.T_evap_out + (prob.T_evap_in - prob.T_evap_out)*i/N
+        T_evap_array[i] = Clapeyron.PH.temperature(prob.fluid,p_evap,h_evap_array[i],z)
+        Δevap_array[i] = T_evap_sf_array[i] -  T_evap_array[i] - prob.pp_evap
+    end
+    Δevap = minimum(Δevap_array)
+
+    h_expander_out =  isentropic_expander(p_evap,p_cond,prob.η_expander,h_evap_out,z,prob.fluid)
+    
+    T_cond_sat = Clapeyron.saturation_temperature(prob.fluid, p_cond)[1]
+    h_cond_sat_liquid = Clapeyron.enthalpy(prob.fluid,p_cond,T_cond_sat,z,phase = :liquid)
+    h_cond_sat_vapour = Clapeyron.enthalpy(prob.fluid,p_cond,T_cond_sat,z,phase = :vapour)
+    h_cond_array = [h_expander_out,h_cond_sat_vapour,h_cond_sat_liquid,h_cond_out]
+    T_cond_array = Clapeyron.PH.temperature.(prob.fluid,p_cond,h_cond_array,z)
+    T_cond_sf_f(h) = prob.T_cond_out - (h_expander_out - h)*(prob.T_cond_out - prob.T_cond_in)/(h_expander_out - h_cond_out)
+    T_cond_sf_array = T_cond_sf_f.(h_cond_array)
+
+    Δcond = minimum(T_cond_array .- T_cond_sf_array .- prob.pp_cond)
+
+    Δh_exp = h_expander_out - h_evap_out
+    Δh_pump = h_pump_out - h_cond_out
+    Δh_evap = h_evap_out - h_pump_out
+    η_orc = (Δh_exp - Δh_pump)/Δh_evap
+
+    return [Δevap,Δcond],η_orc
+end
