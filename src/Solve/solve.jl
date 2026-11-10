@@ -17,6 +17,17 @@ function generate_initial_point(prob::HeatPump,lb::AbstractVector{T},ub::Abstrac
     end    
 end
 
+function generate_initial_point(prob::HeatPumpFast,lb::AbstractVector{T},ub::AbstractVector{T},x0_init::Symbol) where T<: Real
+    if x0_init == :default
+        return [
+            minimum(lb), maximum(ub)
+        ]
+    end
+    if x0_init == :average 
+        return (lb + ub)./2
+    end    
+end
+
 """
 `generate_initial_point(prob::ORC,lb::AbstractVector{T},ub::AbstractVector{T})` 
 Generates initial point for solving the system.
@@ -89,7 +100,7 @@ function generate_box_solve_bounds(prob::HeatPump)
     if prob.T_cond_out > Tcrit
         psat_max = 0.99*pcrit 
     else 
-        psat_max = bubble_pressure(prob.fluid,prob.T_cond_out + prob.pp_cond + prob.ΔT_sc,prob.z)[1] 
+        psat_max = bubble_pressure(prob.fluid,prob.T_cond_out + prob.pp_cond,prob.z)[1] 
         if !isfinite(psat_max)
             psat_max = 0.99*pcrit 
         end
@@ -109,7 +120,31 @@ function generate_box_solve_bounds(prob::HeatPump)
 end
 
 
+function generate_box_solve_bounds(prob::HeatPumpFast)
+    Tcrit,pcrit,_ = crit_mix(prob.fluid, prob.z)
+    lb = zeros(eltype(prob.z), 2)
+    ub = zeros(eltype(prob.z), 2)
+    if prob.T_cond_out > Tcrit
+        psat_max = 0.99*pcrit 
+    else 
+        psat_max = bubble_pressure(prob.fluid,prob.T_cond_out + prob.pp_cond,prob.z)[1] 
+        if !isfinite(psat_max)
+            psat_max = 0.99*pcrit 
+        end
+    end
 
+    psat_min = dew_pressure(prob.fluid,prob.T_evap_out - prob.pp_evap - prob.ΔT_sh,prob.z)[1]
+    
+    ub[1] = psat_max
+    lb[1] = psat_min
+
+    ub[2] = psat_max
+    lb[2] = psat_min
+    if !isfinite(psat_max)
+        throw(error("The upper bound on pressure is not finite. Check cycle parameters. Possible error on bubble_pressure calculation."))
+    end
+    return lb./101325, ub./101325 # normalize to 101325 Pa
+end
 
 """
 `generate_box_solve_bounds(prob::HeatPumpRecuperator) -> lb, ub`
@@ -229,7 +264,7 @@ function ThermoCycleParameters(;
     x0_init::Symbol = :default,
     verbose::Bool = false
 )
-    N > 0 || error("N must be positive")
+    N >= 0 || error("N must be positive")
     is_ad = autodiff == false || autodiff == Val{false}()
     if !is_ad && fd_order < 2
         error("If autodiff is false, fd_order must be ≥ 2 (higher-order finite differences required).")

@@ -162,6 +162,75 @@ end
 
 export HeatPump, HeatPumpRecuperator, COP, show_parameters
 
+function pinch_temperature_condensor(prob::HeatPump, p_cond, T_comp_out, N::Int)
+    fl, z = prob.fluid, prob.z
+
+    T_dew = dew_temperature(fl, p_cond, z)[1]
+    T_bub = bubble_temperature(fl, p_cond, z)[1]
+    h_dew = enthalpy(fl, p_cond, T_dew, z; phase=:vapour)
+    h_bub = enthalpy(fl, p_cond, T_bub, z; phase=:liquid)
+
+    T_in,  h_in  = T_comp_out, enthalpy(fl, p_cond, T_comp_out, z)
+    T_out = T_bub - prob.ΔT_sc
+    h_out = enthalpy(fl, p_cond, T_out, z)
+
+    # secondary fluid: linear in h, cold end at the refrigerant outlet
+    slope = (prob.T_cond_out - prob.T_cond_in) / (h_in - h_out)
+    T_sf(h) = prob.T_cond_in + (h - h_out) * slope
+    gap(h, T) = T - T_sf(h)
+
+    # ---- N == 0: kink points only ----
+    Δmin = gap(h_in, T_in)
+    Δmin = _upd(Δmin, gap(h_out, T_out))
+    # saturation points count only if they lie inside the stream
+    h_dew < h_in  && (Δmin = _upd(Δmin, gap(h_dew, T_dew)))
+    h_bub > h_out && (Δmin = _upd(Δmin, gap(h_bub, T_bub)))
+
+    # ---- N > 0: add N interior points in the two-phase zone ----
+    if N > 0
+        h_hi = min(h_dew, h_in)     # clamp if the inlet is already two-phase
+        h_lo = max(h_bub, h_out)    # clamp if the outlet is already two-phase
+        if h_hi > h_lo
+            for i in 1:N
+                h = h_lo + (h_hi - h_lo) * i / (N + 1)
+                T = Clapeyron.PH.temperature(fl, p_cond, h, z)
+                Δmin = _upd(Δmin, gap(h, T))
+            end
+        end
+    end
+    return Δmin - prob.pp_cond
+end
+
+function pinch_temperature_evaporator(prob::HeatPump, p_evap, h_in, h_out, N::Int)
+    fl, z = prob.fluid, prob.z
+    T_dew = dew_temperature(fl,p_evap,z)[1]
+    h_dew = enthalpy(fl, p_evap, T_dew, z; phase=:vapour)
+    T_in  = Clapeyron.PH.temperature(fl, p_evap, h_in, z)
+    T_out = T_dew + prob.ΔT_sh
+    # secondary fluid: linear in h, leaves cold at the refrigerant inlet
+    slope = (prob.T_evap_in - prob.T_evap_out) / (h_out - h_in)
+    T_sf(h) = prob.T_evap_out + (h - h_in) * slope
+    gap(h, T) = T_sf(h) - T
+
+    # N == 0: kink points (inlet, dew, outlet)
+    Δmin = gap(h_in, T_in)
+    Δmin = _upd(Δmin, gap(h_out, T_out))
+    h_dew < h_out && (Δmin = _upd(Δmin, gap(h_dew, T_dew)))
+
+    # N > 0: interior points in the two-phase zone only (inlet -> dew)
+    if N > 0
+        h_hi = min(h_dew, h_out)
+        if h_hi > h_in
+            for i in 1:N
+                h = h_in + (h_hi - h_in) * i / (N + 1)
+                T = Clapeyron.PH.temperature(fl, p_evap, h, z)
+                Δmin = _upd(Δmin, gap(h, T))
+            end
+        end
+    end
+    return Δmin - prob.pp_evap
+end
+
 """
 `F(prob::HeatPump, x::AbstractVector{T}; N::Int)` function call to `HeatPump`
 """
@@ -188,6 +257,7 @@ function F(prob::HeatPump, x::AbstractVector{T}; N::Int) where {T<:Real}
     
     h_comp_out = isentropic_compressor(p_evap, p_cond, prob.η_comp,
                                        h_evap_out, prob.z, prob.fluid, crit)
+    T_comp_out = Clapeyron.PH.temperature(prob.fluid,p_cond,h_comp_out,prob.z)
     
     # condenser outlet
     T_cond_out = Clapeyron.temperature(prob.fluid, flash_res0_cond) - prob.ΔT_sc
@@ -196,39 +266,41 @@ function F(prob::HeatPump, x::AbstractVector{T}; N::Int) where {T<:Real}
     # ----------------------------------
     # Condenser pinch point
     # ----------------------------------
-    ΔTpp_cond = begin
-        Δmin = typemax(T)
-        for i in 0:N-1
-            α = i / (N-1)
-            h = (1-α) * h_cond_out + α * h_comp_out
-            T_hx  = Clapeyron.PH.temperature(prob.fluid, p_cond, h, prob.z)
-            T_sf  = (1-α) * prob.T_cond_in + α * prob.T_cond_out
-            Δ     = T_hx - T_sf
-            if Δ < Δmin
-                Δmin = Δ
-            end
-        end
-        Δmin - prob.pp_cond
-    end
+    ΔTpp_cond = pinch_temperature_condensor(prob,p_cond,T_comp_out,N)
+    # ΔTpp_cond = begin
+    #     Δmin = typemax(T)
+    #     for i in 0:N-1
+    #         α = i / (N-1)
+    #         h = (1-α) * h_cond_out + α * h_comp_out
+    #         T_hx  = Clapeyron.PH.temperature(prob.fluid, p_cond, h, prob.z)
+    #         T_sf  = (1-α) * prob.T_cond_in + α * prob.T_cond_out
+    #         Δ     = T_hx - T_sf
+    #         if Δ < Δmin
+    #             Δmin = Δ
+    #         end
+    #     end
+    #     Δmin - prob.pp_cond
+    # end
   
 
     # ----------------------------------
     # Evaporator pinch point
     # ----------------------------------
-    ΔTpp_evap = begin
-        Δmin = typemax(T)
-        for i in 0:N-1
-            α = i / (N-1)
-            h = (1-α) * h_cond_out + α * h_evap_out   # linear enthalpy spacing
-            T_hx  = Clapeyron.PH.temperature(prob.fluid, p_evap, h, prob.z)
-            T_sf  = (1-α) * prob.T_evap_out + α * prob.T_evap_in
-            Δ     = T_sf - T_hx
-            if Δ < Δmin
-                Δmin = Δ
-            end
-        end
-        Δmin - prob.pp_evap
-    end
+    ΔTpp_evap = pinch_temperature_evaporator(prob,p_evap,h_cond_out,h_evap_out,N)
+    # ΔTpp_evap = begin
+    #     Δmin = typemax(T)
+    #     for i in 0:N-1
+    #         α = i / (N-1)
+    #         h = (1-α) * h_cond_out + α * h_evap_out   # linear enthalpy spacing
+    #         T_hx  = Clapeyron.PH.temperature(prob.fluid, p_evap, h, prob.z)
+    #         T_sf  = (1-α) * prob.T_evap_out + α * prob.T_evap_in
+    #         Δ     = T_sf - T_hx
+    #         if Δ < Δmin
+    #             Δmin = Δ
+    #         end
+    #     end
+    #     Δmin - prob.pp_evap
+    # end
     return SVector(ΔTpp_cond,ΔTpp_evap)  # avoids heap allocations
 end
 
@@ -995,3 +1067,155 @@ function glide_match_coeff(prob::HeatPump,sol::SolutionState,N::Int)
 end
 
 export get_temperature_profiles, glide_match_coeff
+
+
+mutable struct HeatPumpFast{E<:EoSModel,T<:Real,Z<:AbstractVector{T}} <: AbstractHeatPump 
+    fluid::E
+    z::Z
+    T_evap_in::T
+    T_evap_out::T
+    ΔT_sh::T
+    T_cond_in::T
+    T_cond_out::T
+    ΔT_sc::T
+    η_comp::T
+    pp_evap::T
+    pp_cond::T
+    crit::NTuple{3,T}
+end
+
+function HeatPumpFast(;fluid::EoSModel,z,T_evap_in,T_evap_out,T_cond_in,T_cond_out,η_comp,pp_evap,pp_cond,ΔT_sh,ΔT_sc,check_subcritical = true)
+    #@assert fluid isa CubicModel || fluid isa SingleFluid || fluid isa MultiFluid "The type of EOS provided is not supported as of now."
+    #default assertions
+    @assert length(z) >= 2 "Composition vector z must have at least 2 components for a mixture"
+    @assert length(fluid.components) == length(z) "Composition vector z must match the number of components in the fluid model"
+    @assert T_evap_in > T_evap_out "Evaporator inlet temperature must be more than outlet temperature for the secondary fluid"
+    @assert T_cond_in < T_cond_out "Condenser inlet temperature must be less than outlet temperature for the secondary fluid"
+    @assert η_comp > 0 && η_comp <= 1 "Compressor efficiency must be between 0 and 1"
+    @assert pp_evap > 0 "Evaporator pinch point must be positive"
+    @assert pp_cond > 0 "Condenser pinch point must be positive"
+    @assert ΔT_sh >= 0 "Superheating temperature must be non-negative"
+    @assert ΔT_sc >= 0 "Subcooling temperature must be non-negative"
+
+    # Thermodynamic assertions
+    # For heat-pump the inlet temperature of the condensor should be higher than outlet temperature of the evaporator
+    if  T_cond_in < T_evap_out
+        @warn  "Condenser inlet temperature must be higher than evaporator outlet temperature for the heat pump to function properly. Fixing the evap outlet to condensor inlet"
+        T_evap_out = T_cond_in
+    end
+    # inlet temperature of the condensor should be subcritical - pinch point
+    if check_subcritical
+        T_crit,P_crit,V_crit = crit_mix(fluid,z)
+        @assert T_cond_in < T_crit - pp_cond "Condenser inlet temperature must be less than critical temperature ($T_crit) minus pinch point ($pp_cond) for the heat pump to function properly"
+    else
+        T_crit = convert(Base.promote_eltype(fluid,z),-1)
+        P_crit,V_crit = T_crit,T_crit
+    end
+
+    type_promoted = promote_type(eltype(z), typeof(T_evap_in), typeof(T_evap_out), typeof(T_cond_in), typeof(T_cond_out), typeof(η_comp), typeof(pp_evap), typeof(pp_cond), typeof(ΔT_sh), typeof(ΔT_sc))
+    z_T = map(zi -> convert(type_promoted, zi), z)
+    ΔT_sh_T = convert(type_promoted, ΔT_sh)
+    ΔT_sc_T = convert(type_promoted, ΔT_sc)
+    T_evap_in_T = convert(type_promoted, T_evap_in)
+    T_evap_out_T = convert(type_promoted, T_evap_out)
+    T_cond_in_T = convert(type_promoted, T_cond_in)
+    T_cond_out_T = convert(type_promoted, T_cond_out)
+    η_comp_T = convert(type_promoted, η_comp)
+    pp_evap_T = convert(type_promoted, pp_evap)
+    pp_cond_T = convert(type_promoted, pp_cond)
+    crit_T = (convert(type_promoted, T_crit),convert(type_promoted, P_crit),convert(type_promoted, V_crit))
+    return HeatPumpFast(
+    fluid,         # EoSModel
+    z_T,             # Z<:AbstractVector{T}
+    T_evap_in_T,   # T
+    T_evap_out_T,  # T
+    ΔT_sh_T,       # T
+    T_cond_in_T,   # T
+    T_cond_out_T,  # T
+    ΔT_sc_T,       # T
+    η_comp_T,      # T
+    pp_evap_T,     # T
+    pp_cond_T,     # T
+    crit_T,        # T
+)
+end
+
+
+function show(io::IO, prob::HeatPumpFast)
+    println(io, "HeatPumpFast Problem:")
+    println(io, "  Fluid: ", prob.fluid)
+    println(io, "  Composition: ", prob.z)
+    println(io, "  Evaporator Inlet Temperature: ", prob.T_evap_in)
+    println(io, "  Evaporator Outlet Temperature: ", prob.T_evap_out)
+    println(io, "  Superheating Temperature: ", prob.ΔT_sh)
+    println(io, "  Condenser Inlet Temperature: ", prob.T_cond_in)
+    println(io, "  Condenser Outlet Temperature: ", prob.T_cond_out)
+    println(io, "  Subcooling Temperature: ", prob.ΔT_sc)
+    println(io, "  Compressor Efficiency: ", prob.η_comp)
+    println(io, "  Evaporator Pinch Point: ", prob.pp_evap)
+    println(io, "  Condenser Pinch Point: ", prob.pp_cond)
+end
+
+function F(prob::HeatPumpFast{E,T,Z},x::AbstractVector{T2};N::Int=1) where {E,T,Z,T2<:Real}
+    @assert length(x) == 2 "x must be a vector of length 2"
+    TT = promote_type(T, T2)
+    p_evap,p_cond = x .* 101325 # convert to Pa
+    T_sat_evap = dew_temperature(prob.fluid,p_evap,prob.z)[1]
+    T_bub_cond = bubble_temperature(prob.fluid,p_cond,prob.z)[1]
+    T_dew_cond = dew_temperature(prob.fluid,p_cond,prob.z)[1]
+    T_evap_out = T_sat_evap + prob.ΔT_sh
+    h_evap_out = Clapeyron.enthalpy(prob.fluid, p_evap, T_evap_out, prob.z)
+    h_comp_in = h_evap_out;
+    #crit = crit_mix!(prob)
+    h_comp_out = Carnot.isentropic_compressor(p_evap, p_cond, prob.η_comp, h_comp_in, prob.z, prob.fluid)
+    T_cond_out = T_bub_cond - prob.ΔT_sc
+    h_cond_out = Clapeyron.enthalpy(prob.fluid, p_cond, T_cond_out, prob.z)
+    h_cond_in = h_comp_out
+    h_cond_vapour = Clapeyron.enthalpy(prob.fluid, p_cond, T_dew_cond, prob.z,phase =:vapour)
+    h_cond_liquid = Clapeyron.enthalpy(prob.fluid, p_cond, T_bub_cond, prob.z,phase =:liquid)
+    h_cond_array = TT[h_cond_in,h_cond_vapour,h_cond_liquid,h_cond_out]
+    T_cond_sf_f(h) = prob.T_cond_out - (h_cond_in - h)*(prob.T_cond_out - prob.T_cond_in)/(h_cond_in - h_cond_out)
+    Δmin_cond = typemax(TT)
+    for h in h_cond_array
+        T_hx = Clapeyron.PH.temperature(prob.fluid, p_cond, h, prob.z)::TT
+        Δ = (T_hx - T_cond_sf_f(h))::TT
+        if Δ < Δmin_cond
+            Δmin_cond = Δ
+        end
+    end
+    ΔT_cond = (Δmin_cond - prob.pp_cond)::TT
+    h_valve_in = h_cond_out;
+    h_valve_out = h_valve_in # isenthalpic expansion
+
+    h_evap_in = h_valve_out
+    h_evap_sat_vapour = Clapeyron.enthalpy(prob.fluid, p_evap, T_sat_evap, prob.z,phase =:vapour)
+    h_evap_array = reverse(TT[h_evap_in,h_evap_sat_vapour,h_evap_out])
+    T_evap_sf_f(h) = prob.T_evap_in - (h_evap_out - h)*(prob.T_evap_in - prob.T_evap_out)/(h_evap_out - h_evap_in)
+    Δmin_evap = typemax(TT)
+    for h in h_evap_array
+        T_hx = Clapeyron.PH.temperature(prob.fluid, p_evap, h, prob.z)::TT
+        Δ = (T_evap_sf_f(h) - T_hx)::TT
+        if Δ < Δmin_evap
+            Δmin_evap = Δ
+        end
+    end
+    ΔT_evap = (Δmin_evap - prob.pp_evap)::TT
+    [ΔT_cond,ΔT_evap]
+end
+
+
+export HeatPumpFast
+
+function COP(prob::HeatPumpFast,sol::SolutionState)
+    p_evap,p_cond = sol.x.* 101325 # convert to Pa
+    T_evap_out = dew_temperature(prob.fluid, p_evap, prob.z)[1] + prob.ΔT_sh 
+    h_evap_out = Clapeyron.enthalpy(prob.fluid, p_evap, T_evap_out, prob.z)
+
+    h_comp_in = h_evap_out;
+    h_comp_out = isentropic_compressor(p_evap, p_cond, prob.η_comp, h_comp_in, prob.z, prob.fluid)
+
+    T_cond_out = Clapeyron.bubble_temperature(prob.fluid, p_cond, prob.z)[1] - prob.ΔT_sc
+    h_cond_out = Clapeyron.enthalpy(prob.fluid, p_cond, T_cond_out, prob.z)
+
+    return  (h_cond_out - h_comp_out)/(h_comp_out - h_comp_in) 
+end

@@ -188,4 +188,4 @@ end
 
 
 
-export SolutionState
+export SolutionState, NaNSolution
