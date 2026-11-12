@@ -336,7 +336,7 @@ function generate_optimization_bounds(prob::ORCFast,minbounds::TemperatureMinimu
 end
 
 function optimize(prob::HeatPump,
-    alg::Metaheuristics.AbstractAlgorithm,param::ThermoCycleParameters,minbounds::TemperatureMinimumBounds)
+    alg::Metaheuristics.AbstractAlgorithm,param::ThermoCycleParameters,minbounds::TemperatureMinimumBounds = TemperatureMinimumBounds(3.0,3.0)) 
 
 
     ℓ = _build_objective(prob,param,alg)
@@ -360,7 +360,7 @@ function optimize(prob::HeatPump,
 end
 
 function optimize(prob::HeatPumpFast,
-    alg::Metaheuristics.AbstractAlgorithm,param::ThermoCycleParameters,minbounds::TemperatureMinimumBounds)
+    alg::Metaheuristics.AbstractAlgorithm,param::ThermoCycleParameters,minbounds::TemperatureMinimumBounds= TemperatureMinimumBounds(2.0,2.0))
 
 
     ℓ = _build_objective(prob,param,alg)
@@ -384,7 +384,7 @@ function optimize(prob::HeatPumpFast,
 end
 
 function optimize(prob::HeatPumpRecuperator,
-    alg::Metaheuristics.AbstractAlgorithm,param::ThermoCycleParameters,minbounds::TemperatureMinimumBounds)
+    alg::Metaheuristics.AbstractAlgorithm,param::ThermoCycleParameters,minbounds::TemperatureMinimumBounds= TemperatureMinimumBounds(2.0,2.0))
 
 
     ℓ = _build_objective(prob,param,alg)
@@ -410,7 +410,7 @@ end
 
 
 function optimize(prob::ORC,
-    alg::Metaheuristics.AbstractAlgorithm,param::ThermoCycleParameters,minbounds::TemperatureMinimumBounds)
+    alg::Metaheuristics.AbstractAlgorithm,param::ThermoCycleParameters,minbounds::TemperatureMinimumBounds= TemperatureMinimumBounds(2.0,2.0))
 
     
     ℓ = _build_objective(prob,param,alg)
@@ -434,7 +434,7 @@ function optimize(prob::ORC,
 end
 
 function optimize(prob::ORCFast,
-    alg::Metaheuristics.AbstractAlgorithm,param::ThermoCycleParameters,minbounds::TemperatureMinimumBounds)
+    alg::Metaheuristics.AbstractAlgorithm,param::ThermoCycleParameters,minbounds::TemperatureMinimumBounds= TemperatureMinimumBounds(2.0,2.0))
 
     
     ℓ = _build_objective(prob,param,alg)
@@ -459,7 +459,7 @@ end
 
 
 function optimize(prob::ORCEconomizer,
-    alg::Metaheuristics.AbstractAlgorithm,param::ThermoCycleParameters,minbounds::TemperatureMinimumBounds)
+    alg::Metaheuristics.AbstractAlgorithm,param::ThermoCycleParameters,minbounds::TemperatureMinimumBounds= TemperatureMinimumBounds(2.0,2.0))
 
    
     ℓ = _build_objective(prob,param,alg)
