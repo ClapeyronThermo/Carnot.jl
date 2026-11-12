@@ -258,6 +258,7 @@ end
 
 
     fluid = cPR(["r1233zde","butane"],idealmodel =idealmodel)
+    z = [1.0,1.0]
     orc = ORCFast(
                 fluid=fluid,z=z,
                     T_evap_in=383.15,T_evap_out = 343.15,
