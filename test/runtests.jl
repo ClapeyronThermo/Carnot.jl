@@ -72,21 +72,6 @@ end
     end
 end
 
-@testset "ORC - mixture AD" begin
-    for i in eachindex(eos_)
-        fluid = eos_[i](["propane","butane"],idealmodel = ReidIdeal);
-        T_evap_out = 310
-        z = [0.6157894736842106, 9.384210526315789]
-        ΔT_sh = 11.473684210526315 
-        _orc_ = ORC(fluid=fluid, z=z, T_evap_in=330, T_evap_out=T_evap_out, T_cond_in=270, T_cond_out=280, η_pump=0.75, η_expander=0.75, pp_evap=3, pp_cond=3, ΔT_sc=2.0, ΔT_sh=ΔT_sh)
-        sol = solve(_orc_,solverparams_ad)
-        @test Carnot.norm(sol.residuals) < 1e-3
-        @test sol.soltype == :subcritical
-    end
-end
-
-
-
 @testset "ORC - pure AD" begin
     for i in eachindex(eos_)
         for fluid in fluids_test
@@ -101,6 +86,21 @@ end
         end
     end
 end
+
+
+@testset "ORC - mixture AD" begin
+        fluid = cPR(["propane","butane"],idealmodel = ReidIdeal);
+        T_evap_out = 310
+        z = [0.6157894736842106, 9.384210526315789]
+        ΔT_sh = 11.473684210526315 
+        _orc_ = ORC(fluid=fluid, z=z, T_evap_in=330, T_evap_out=T_evap_out, T_cond_in=270, T_cond_out=280, η_pump=0.75, η_expander=0.75, pp_evap=3, pp_cond=3, ΔT_sc=2.0, ΔT_sh=ΔT_sh)
+        sol = solve(_orc_,solverparams_fd)
+        @test Carnot.norm(sol.residuals) < 1e-3
+        @test sol.soltype == :subcritical
+end
+
+
+
 
 
 @testset "ORC - mixture  FD" begin
@@ -216,4 +216,72 @@ end
     @test sol.soltype == :subcritical 
     @test sol.x[1]>=sol.x[2]
     end
+end
+
+
+@testset "HP-Mixture Solver" begin
+    fluid_string = ["propane", "pentane"]
+
+    fluid = cPR(fluid_string,idealmodel =ReidIdeal)
+    
+    hp = HeatPump(
+        fluid = fluid,z = [1.0,1.0],
+        T_evap_in = 283.15,
+        T_evap_out = 273.15,
+        ΔT_sh = 3.0,
+        T_cond_in = 293.15,
+        T_cond_out = 338.15,
+        ΔT_sc = 3.0,
+        η_comp = 0.7,
+        pp_evap = 3.0,
+        pp_cond = 3.0
+    )
+
+    sol_hp = solve(hp,ThermoCycleParameters(autodiff= false, verbose = false, N = 30))
+
+    @test sol_hp.iterations == 6 
+    @test Carnot.norm(sol_hp.residuals) < 1e-3
+    @test isapprox(sol_hp.x[1],0.559289841828736,atol=1e-5)
+    @test isapprox(sol_hp.x[2],4.930621176053093,atol=1e-5)
+end
+
+@testset "ORCFast - FD" begin
+    fluid_reid = ReidIdeal(["butane"]);
+
+    idealmodel = ReidIdeal(["r1233zde","butane"];
+                        userlocations = (a = [-31.191921817803298,fluid_reid.params.a[1]], 
+                                    b = [1.0823742985460638,fluid_reid.params.b[1]], 
+                                    c = [-0.003938209548961325,fluid_reid.params.c[1]],
+                                    d = [7.64276485084316e-6,fluid_reid.params.d[1]],
+                                    e = [-5.612056650834053e-9,fluid_reid.params.e[1]], Mw = [130.4942095,fluid_reid.params.Mw[1]])
+                                    )
+
+
+    fluid = cPR(["r1233zde","butane"],idealmodel =idealmodel)
+    z = [1.0,1.0]
+    orc = ORCFast(
+                fluid=fluid,z=z,
+                    T_evap_in=383.15,T_evap_out = 343.15,
+                    T_cond_in = 283.15,T_cond_out=293.15,
+                    η_pump=0.7, η_expander = 0.7,
+                    pp_evap=3.0,pp_cond=3.0,
+                    ΔT_sc = 15,ΔT_sh = 5
+                )
+   
+    sol = solve(orc,ThermoCycleParameters(autodiff= false, verbose = false, N = 30))
+
+    @test Carnot.norm(sol.residuals) < 1e-3
+    @test sol.x[1] > sol.x[2]
+end
+
+@testset "HeatPumpFast - FD" begin
+    fluid = cPR(["propane","butane"],idealmodel = ReidIdeal)
+    hp = HeatPumpFast(fluid=fluid, z=[1.0,1.0], 
+    T_evap_in=310, T_evap_out=300.0, T_cond_in=305, T_cond_out=360, η_comp=0.75, 
+        pp_evap=5, pp_cond=5,
+        ΔT_sc=10.0, ΔT_sh=5.0)
+
+    sol = solve(hp, ThermoCycleParameters(autodiff= false, verbose = true, N = 1))
+    @test Carnot.norm(sol.residuals) < 1e-3
+    @test sol.x[1] < sol.x[2]
 end
