@@ -43,6 +43,17 @@ function generate_initial_point(prob::ORC,lb::AbstractVector{T},ub::AbstractVect
     end  
 end
 
+function generate_initial_point(prob::ORCFast,lb::AbstractVector{T},ub::AbstractVector{T},x0_init::Symbol) where T<: Real
+    if x0_init == :default
+        return [
+            minimum(lb), maximum(ub)
+        ]
+    end
+    if x0_init == :average 
+        return (lb + ub)./2
+    end  
+end
+
 """
 `generate_initial_point(prob::ORCEconomizer,lb::AbstractVector{T},ub::AbstractVector{T})` 
 Generates initial point for solving the system.
@@ -189,6 +200,37 @@ function generate_box_solve_bounds(prob::ORC)
     return lb./101325, ub./101325 # normalize to 101325 Pa
 end
 
+function generate_box_solve_bounds(prob::ORCFast)
+    Tcrit,pcrit,_ = crit_mix(prob.fluid, prob.z)
+    lb = zeros(eltype(prob.z), 2)
+    ub = zeros(eltype(prob.z), 2)
+    if prob.T_evap_in > Tcrit
+         psat_max = 0.95*pcrit
+    end
+    if prob.T_evap_out > Tcrit 
+        throw(error("For now we handel subcritical ORC. The outlet temperature of the evap : 
+        $(prob.T_evap_out) is higher than critical temperature of the fluid $Tcrit, this will not allow to meet the pinch points.
+        "))
+    end
+    psat_min_evap = dew_pressure(prob.fluid,prob.T_evap_out - prob.pp_evap- prob.ΔT_sh,prob.z)[1]
+    psat_max_evap = bubble_pressure(prob.fluid,prob.T_evap_in - prob.pp_evap- prob.ΔT_sh,prob.z)[1]
+    if !isfinite(psat_max_evap)
+        psat_max_evap = 0.95*pcrit
+    end
+    psat_min_cond = dew_pressure(prob.fluid,prob.T_cond_in + prob.pp_cond + prob.ΔT_sc,prob.z)[1]
+    psat_max_cond = bubble_pressure(prob.fluid,prob.T_cond_out + prob.pp_cond + prob.ΔT_sc,prob.z)[1]
+    @assert psat_min_cond <= psat_max_cond "Box generation min has to be less than max, right now min = $psat_min_cond and max = $psat_max_cond"
+    @assert psat_min_evap <= psat_max_evap "Box generation min has to be less than max, right now min = $psat_min_evap and max = $psat_max_evap"
+    # psat_min = dew_pressure(prob.fluid,prob.T_cond_in,prob.z)[1]
+    # psat_max = bubble_pressure(prob.fluid,prob.T_evap_in - prob.ΔT_sh,prob.z)[1] #pcrit*0.9#dew_pressure(prob.fluid,prob.T_evap_in,prob.z)[1]
+    ub[1] = psat_max_evap#dew_pressure(prob.fluid,prob.T_evap_in - prob.pp_evap - prob.ΔT_sh,prob.z)[1] # evaporator pressure
+    lb[1] = psat_min_evap#bubble_pressure(prob.fluid,prob.T_evap_out - prob.pp_evap - prob.ΔT_sh,prob.z)[1] # evaporator pressure
+    ub[2] = psat_max_cond
+    lb[2] = psat_min_cond 
+
+    return lb./101325, ub./101325 # normalize to 101325 Pa
+end
+
 """
 `generate_box_solve_bounds(prob::ORCEconomizer) -> lb, ub`
 Generates lower and upper bounds for the heat pump problem based on its parameters.
@@ -301,6 +343,12 @@ function _build_residual(prob::ORC, N::Int)
             nc = length(prob.fluid.components)
             return nc == 1 ? F_pure(prob, x) : F(prob, x, N = N)
         end
+    end
+end
+
+function _build_residual(prob::ORCFast, N::Int)
+    f = let prob = prob, N = N
+        x -> F(prob, x)
     end
 end
 

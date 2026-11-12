@@ -30,6 +30,21 @@ function objective(prob::HeatPump,param::ThermoCycleParameters,x::AbstractVector
     end
 end
 
+function objective(prob::HeatPumpFast,param::ThermoCycleParameters,x::AbstractVector)
+    @assert length(x) == 2 "Only super and sub cool temperatures"
+    prob.ΔT_sh = x[1]
+    prob.ΔT_sc = x[2] 
+    sol =  try solve(prob,param)
+    catch
+        return 0.0
+    end
+    if Carnot.norm(sol.residuals) > 1e-3
+        return 0.0
+    else
+        return COP(prob,sol)
+    end
+end
+
 function objective(prob::HeatPumpRecuperator,param::ThermoCycleParameters,x::AbstractVector)
     @assert length(x) == 2 "Only super and sub cool temperatures"
     prob.hp.ΔT_sh = x[1]
@@ -46,6 +61,21 @@ function objective(prob::HeatPumpRecuperator,param::ThermoCycleParameters,x::Abs
 end
 
 function objective(prob::ORC,param::ThermoCycleParameters,x::AbstractVector)
+    @assert length(x) == 2 "Only super and sub cool temperatures"
+    prob.ΔT_sh = x[1]
+    prob.ΔT_sc = x[2] 
+    sol =  try solve(prob,param) 
+        catch
+            return 0.0
+        end
+    if Carnot.norm(sol.residuals) > 1e-3
+        return 0.0
+    else
+        return η(prob,sol)
+    end
+end
+
+function objective(prob::ORCFast,param::ThermoCycleParameters,x::AbstractVector)
     @assert length(x) == 2 "Only super and sub cool temperatures"
     prob.ΔT_sh = x[1]
     prob.ΔT_sc = x[2] 
@@ -98,7 +128,56 @@ function _build_objective(prob::HeatPump,
         end
     end
 end
+
+function _build_objective(prob::HeatPumpFast,
+    param::ThermoCycleParameters,
+    algo::Metaheuristics.AbstractAlgorithm,
+    )
+
+    if algo.options.parallel_evaluation
+        return let prob = prob, param = param
+            X -> begin
+                fitness = zeros(size(X, 1))
+
+                Threads.@threads for i in axes(X, 1)
+                    fitness[i] = objective(prob, param, X[i, :])
+                end
+
+                fitness
+            end
+        end
+    else
+        return let prob = prob, param = param
+            x -> objective(prob, param, x)
+        end
+    end
+end
+
 function _build_objective(prob::ORC,
+    param::ThermoCycleParameters,
+    algo::Metaheuristics.AbstractAlgorithm,
+    )   
+
+    if algo.options.parallel_evaluation
+        return let prob = prob, param = param
+            X -> begin
+                fitness = zeros(size(X, 1))
+
+                Threads.@threads for i in axes(X, 1)
+                    fitness[i] = objective(prob, param, X[i, :])
+                end
+
+                fitness
+            end
+        end
+    else
+        return let prob = prob, param = param
+            x -> objective(prob, param, x)
+        end
+    end
+end
+
+function _build_objective(prob::ORCFast,
     param::ThermoCycleParameters,
     algo::Metaheuristics.AbstractAlgorithm,
     )   
@@ -226,6 +305,16 @@ function generate_optimization_bounds(prob::HeatPump,minbounds::TemperatureMinim
     return lb,ub
 end
 
+function generate_optimization_bounds(prob::HeatPumpFast,minbounds::TemperatureMinimumBounds = TemperatureMinimumBounds(3.0,3.0))
+    ΔT_sh_min = minbounds.ΔT_sh_min
+    ΔT_sh_max = prob.T_evap_in - prob.T_evap_out
+    ΔT_sc_min = minbounds.ΔT_sc_min
+    ΔT_sc_max = prob.T_cond_out - prob.T_cond_in
+    lb = [ΔT_sh_min,ΔT_sc_min]
+    ub = [ΔT_sh_max,ΔT_sc_max]
+    return lb,ub
+end
+
 function generate_optimization_bounds(prob::ORC,minbounds::TemperatureMinimumBounds = TemperatureMinimumBounds(3.0,3.0))
     ΔT_sh_min = minbounds.ΔT_sh_min
     ΔT_sh_max = prob.T_evap_in - prob.T_evap_out
@@ -236,8 +325,41 @@ function generate_optimization_bounds(prob::ORC,minbounds::TemperatureMinimumBou
     return lb,ub
 end
 
+function generate_optimization_bounds(prob::ORCFast,minbounds::TemperatureMinimumBounds = TemperatureMinimumBounds(3.0,3.0))
+    ΔT_sh_min = minbounds.ΔT_sh_min
+    ΔT_sh_max = prob.T_evap_in - prob.T_evap_out
+    ΔT_sc_min = minbounds.ΔT_sc_min
+    ΔT_sc_max = prob.T_cond_out - prob.T_cond_in
+    lb = [ΔT_sh_min,ΔT_sc_min]
+    ub = [ΔT_sh_max,ΔT_sc_max]
+    return lb,ub
+end
 
 function optimize(prob::HeatPump,
+    alg::Metaheuristics.AbstractAlgorithm,param::ThermoCycleParameters,minbounds::TemperatureMinimumBounds)
+
+
+    ℓ = _build_objective(prob,param,alg)
+
+
+    lb,ub = generate_optimization_bounds(prob,minbounds)
+ 
+    bounds = Metaheuristics.boxconstraints(lb = lb, ub = ub)
+    opt_result = Metaheuristics.optimize(ℓ,bounds,alg)
+    
+    x_best = Metaheuristics.minimizer(opt_result)
+
+    loss_opt_M = Metaheuristics.minimum(opt_result)
+
+    hp_opt = prob
+    hp_opt.ΔT_sh = x_best[1]
+    hp_opt.ΔT_sc = x_best[2]
+    sol_best = Carnot.solve(hp_opt,param)
+
+    return x_best,sol_best
+end
+
+function optimize(prob::HeatPumpFast,
     alg::Metaheuristics.AbstractAlgorithm,param::ThermoCycleParameters,minbounds::TemperatureMinimumBounds)
 
 
@@ -310,6 +432,31 @@ function optimize(prob::ORC,
 
     return x_best,sol_best
 end
+
+function optimize(prob::ORCFast,
+    alg::Metaheuristics.AbstractAlgorithm,param::ThermoCycleParameters,minbounds::TemperatureMinimumBounds)
+
+    
+    ℓ = _build_objective(prob,param,alg)
+   
+    
+    lb,ub = generate_optimization_bounds(prob,minbounds)
+  
+    bounds = Metaheuristics.boxconstraints(lb = lb, ub = ub)
+    opt_result = Metaheuristics.optimize(ℓ,bounds,alg)
+    
+    x_best = Metaheuristics.minimizer(opt_result)
+
+    loss_opt_M = Metaheuristics.minimum(opt_result)
+
+    orc_opt = prob
+    orc_opt.ΔT_sh = x_best[1]
+    orc_opt.ΔT_sc = x_best[2]
+    sol_best = Carnot.solve(orc_opt,param)
+
+    return x_best,sol_best
+end
+
 
 function optimize(prob::ORCEconomizer,
     alg::Metaheuristics.AbstractAlgorithm,param::ThermoCycleParameters,minbounds::TemperatureMinimumBounds)

@@ -251,7 +251,7 @@ function F(prob::ORC, x::AbstractVector{T}; N::Int64) where {T<:Real}
     T_evap_dew =  Clapeyron.temperature(prob.fluid, flash_res1_evap)
     T_evap_out = T_evap_dew + prob.ΔT_sh
     h_evap_out = Clapeyron.enthalpy(prob.fluid, p_evap, T_evap_out, prob.z)
-
+    
     h_exp_in  = h_evap_out
     h_exp_out = Carnot.isentropic_expander(p_evap, p_cond, prob.η_expander, h_exp_in, prob.z, prob.fluid)
 
@@ -905,44 +905,90 @@ end
 
 
 
-function F(prob::ORCFast,x::AbstractVector{T},N::Int64 = 1) where T<:Real
+function F(prob::ORCFast,x::AbstractVector{T}) where T<:Real
     p_evap,p_cond = x .* 101325 # convert to Pa
-    T_evap_out = Clapeyron.dew_temperature(prob.fluid, p_evap,prob.z)[1] + prob.ΔT_sh
-    @show T_evap_out
+    flash_res0_cond = Clapeyron.qp_flash_impl(prob.fluid, 0.0, p_cond, prob.z, RRQXFlash(equilibrium = :vle))
+    flash_res1_evap = Clapeyron.qp_flash_impl(prob.fluid, 1.0, p_evap, prob.z, RRQXFlash(equilibrium = :vle))
+    flash_res0_evap = Clapeyron.qp_flash_impl(prob.fluid, 0.0, p_evap, prob.z, RRQXFlash(equilibrium = :vle))
+    flash_res1_cond = Clapeyron.qp_flash_impl(prob.fluid, 1.0, p_cond, prob.z, RRQXFlash(equilibrium = :vle))
+
+    T_evap_out = Clapeyron.temperature(prob.fluid, flash_res1_evap) + prob.ΔT_sh
     h_evap_out = Clapeyron.enthalpy(prob.fluid, p_evap, T_evap_out, prob.z)
-    h_exp_in = h_evap_out;
-    h_exp_out = Carnot.isentropic_expander(p_evap, p_cond, prob.η_expander, h_exp_in, prob.z, prob.fluid)
-    h_cond_in = h_exp_out
-    T_cond_bub = Clapeyron.bubble_temperature(prob.fluid, p_cond,prob.z)[1]
-    T_cond_dew = Clapeyron.dew_temperature(prob.fluid, p_cond,prob.z)[1]
-    T_cond_out = T_cond_bub - prob.ΔT_sc
+    h_exp_in = h_evap_out
+    T_cond_out = Clapeyron.temperature(prob.fluid, flash_res0_cond) - prob.ΔT_sc
     h_cond_out = Clapeyron.enthalpy(prob.fluid, p_cond, T_cond_out, prob.z)
-    
-    h_cond_sat_liquid = Clapeyron.enthalpy(prob.fluid,p_cond,T_cond_bub,prob.z)
-    h_cond_sat_vapour = Clapeyron.enthalpy(prob.fluid,p_cond,T_cond_dew,prob.z)
-    h_cond_array = [h_cond_in,h_cond_sat_vapour,h_cond_sat_liquid,h_cond_out]
-    T_cond_array = [Clapeyron.PH.temperature(prob.fluid,p_cond,h,prob.z) for h in h_cond_array]
-    @show T_cond_array
-    T_cond_sf_f(h) = prob.T_cond_out - (h_cond_in - h)*(prob.T_cond_out - prob.T_cond_in)/(h_cond_in - h_cond_out)
-    @show T_cond_sf_f.(h_cond_array)
     h_pump_in = h_cond_out
     h_pump_out = Carnot.isentropic_pump(p_cond, p_evap, prob.η_pump, h_pump_in, prob.z, prob.fluid)
     h_evap_in = h_pump_out
-    T_evap_dew = Clapeyron.dew_temperature(prob.fluid, p_evap, prob.z)[1]
-    T_evap_bub = Clapeyron.bubble_temperature(prob.fluid, p_evap, prob.z)[1]
-    T_evap_out = T_evap_dew + prob.ΔT_sh
-    h_evap_sat_liquid = Clapeyron.enthalpy(prob.fluid,p_evap,T_evap_bub,prob.z)
-    h_evap_sat_vapour = Clapeyron.enthalpy(prob.fluid,p_evap,T_evap_dew,prob.z)
-    h_evap_array = [h_evap_out,h_evap_sat_vapour,h_evap_sat_liquid,h_pump_out]
+
+    h_evap_array = [h_evap_in,Clapeyron.enthalpy(prob.fluid, flash_res0_evap),Clapeyron.enthalpy(prob.fluid, flash_res1_evap),h_evap_out]
+    f_T_sf(h) = prob.T_evap_in - (h_evap_out - h)*(prob.T_evap_in - prob.T_evap_out)/(h_evap_out - h_evap_in)
     T_evap_array = [Clapeyron.PH.temperature(prob.fluid,p_evap,h,prob.z) for h in h_evap_array]
-    @show T_evap_array
+    ΔT_evap = minimum(f_T_sf.(h_evap_array) .- T_evap_array) - prob.pp_evap
 
-    T_evap_sf_f(h) = prob.T_evap_in - (h_evap_out - h)*(prob.T_evap_in - prob.T_evap_out)/(h_evap_out - h_evap_in)
-    @show T_evap_sf_f.(h_evap_array)
-    ΔT_evap = minimum(T_evap_sf_f.(h_evap_array) .- T_evap_array) - prob.pp_evap
-    ΔT_cond = minimum(T_cond_array .- T_cond_sf_f.(h_cond_array)) - prob.pp_cond
+    h_exp_out = Carnot.isentropic_expander(p_evap, p_cond, prob.η_expander, h_exp_in, prob.z, prob.fluid)
+    h_cond_in = h_exp_out
+    h_cond_array = [h_cond_in,Clapeyron.enthalpy(prob.fluid, flash_res1_cond),Clapeyron.enthalpy(prob.fluid, flash_res0_cond),h_cond_out]
+    f_T_sf_cond(h) = prob.T_cond_out - (h_cond_in - h)*(prob.T_cond_out - prob.T_cond_in)/(h_cond_in - h_cond_out)
+    T_cond_array = [Clapeyron.PH.temperature(prob.fluid,p_cond,h,prob.z) for h in h_cond_array]
 
-    return [ΔT_evap,ΔT_cond]
+    ΔT_cond = minimum(T_cond_array .- f_T_sf_cond.(h_cond_array)) - prob.pp_cond
+
+    return [ΔT_evap, ΔT_cond]
+
+    # T_evap_out = Clapeyron.dew_temperature(prob.fluid, p_evap,prob.z)[1] + prob.ΔT_sh
+    # @show T_evap_out
+    # h_evap_out = Clapeyron.enthalpy(prob.fluid, p_evap, T_evap_out, prob.z)
+    # h_exp_in = h_evap_out;
+    # h_exp_out = Carnot.isentropic_expander(p_evap, p_cond, prob.η_expander, h_exp_in, prob.z, prob.fluid)
+    # h_cond_in = h_exp_out
+    # T_cond_bub = Clapeyron.bubble_temperature(prob.fluid, p_cond,prob.z)[1]
+    # T_cond_dew = Clapeyron.dew_temperature(prob.fluid, p_cond,prob.z)[1]
+    # T_cond_out = T_cond_bub - prob.ΔT_sc
+    # h_cond_out = Clapeyron.enthalpy(prob.fluid, p_cond, T_cond_out, prob.z)
+    
+    # h_cond_sat_liquid = Clapeyron.enthalpy(prob.fluid,p_cond,T_cond_bub,prob.z)
+    # h_cond_sat_vapour = Clapeyron.enthalpy(prob.fluid,p_cond,T_cond_dew,prob.z)
+    # h_cond_array = [h_cond_in,h_cond_sat_vapour,h_cond_sat_liquid,h_cond_out]
+    # T_cond_array = [Clapeyron.PH.temperature(prob.fluid,p_cond,h,prob.z) for h in h_cond_array]
+    # @show T_cond_array
+    # T_cond_sf_f(h) = prob.T_cond_out - (h_cond_in - h)*(prob.T_cond_out - prob.T_cond_in)/(h_cond_in - h_cond_out)
+    # @show T_cond_sf_f.(h_cond_array)
+    # h_pump_in = h_cond_out
+    # h_pump_out = Carnot.isentropic_pump(p_cond, p_evap, prob.η_pump, h_pump_in, prob.z, prob.fluid)
+    # h_evap_in = h_pump_out
+    # T_evap_dew = Clapeyron.dew_temperature(prob.fluid, p_evap, prob.z)[1]
+    # T_evap_bub = Clapeyron.bubble_temperature(prob.fluid, p_evap, prob.z)[1]
+    # T_evap_out = T_evap_dew + prob.ΔT_sh
+    # h_evap_sat_liquid = Clapeyron.enthalpy(prob.fluid,p_evap,T_evap_bub,prob.z)
+    # h_evap_sat_vapour = Clapeyron.enthalpy(prob.fluid,p_evap,T_evap_dew,prob.z)
+    # h_evap_array = [h_evap_out,h_evap_sat_vapour,h_evap_sat_liquid,h_pump_out]
+    # T_evap_array = [Clapeyron.PH.temperature(prob.fluid,p_evap,h,prob.z) for h in h_evap_array]
+    # @show T_evap_array
+
+    # T_evap_sf_f(h) = prob.T_evap_in - (h_evap_out - h)*(prob.T_evap_in - prob.T_evap_out)/(h_evap_out - h_evap_in)
+    # @show T_evap_sf_f.(h_evap_array)
+    # ΔT_evap = minimum(T_evap_sf_f.(h_evap_array) .- T_evap_array) - prob.pp_evap
+    # ΔT_cond = minimum(T_cond_array .- T_cond_sf_f.(h_cond_array)) - prob.pp_cond
+
+    # return [ΔT_evap,ΔT_cond]
 end
 
 export ORCFast
+
+
+function η(prob::ORCFast,sol::AbstractVector{T}) where {T<:Real}
+    @assert length(sol) == 2 "Pressure vector p must be of length 2"
+    p_evap,p_cond = sol .* 101325 # convert to Pa
+    if p_evap < p_cond
+        return 0.0
+    end
+    Tsat_cond = Clapeyron.bubble_temperature(prob.fluid, p_cond, prob.z)[1]
+    h1 = Clapeyron.enthalpy(prob.fluid, p_cond, Tsat_cond - prob.ΔT_sc, prob.z)
+    h2 = isentropic_pump(p_cond, p_evap, prob.η_pump, h1, prob.z, prob.fluid)
+
+    Tsat_evap = Clapeyron.dew_temperature(prob.fluid, p_evap, prob.z)[1]
+    h3 = Clapeyron.enthalpy(prob.fluid, p_evap, Tsat_evap + prob.ΔT_sh, prob.z)
+    h4 = isentropic_expander(p_evap, p_cond, prob.η_expander, h3, prob.z, prob.fluid)
+    return ((h4-h3) + (h2-h1))/(h3-h2)
+end
