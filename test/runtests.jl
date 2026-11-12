@@ -274,7 +274,7 @@ end
     @test sol.x[1] > sol.x[2]
 end
 
-@test "HeatPumpFast - FD" begin
+@testset "HeatPumpFast - FD" begin
     fluid = cPR(["propane","butane"],idealmodel = ReidIdeal)
     hp = HeatPumpFast(fluid=fluid, z=[1.0,1.0], 
     T_evap_in=310, T_evap_out=300.0, T_cond_in=305, T_cond_out=360, η_comp=0.75, 
@@ -282,4 +282,6 @@ end
         ΔT_sc=10.0, ΔT_sh=5.0)
 
     sol = solve(hp, ThermoCycleParameters(autodiff= false, verbose = true, N = 1))
+    @test Carnot.norm(sol.residuals) < 1e-3
+    @test sol.x[1] < sol.x[2]
 end
