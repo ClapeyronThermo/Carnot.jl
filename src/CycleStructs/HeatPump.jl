@@ -1084,6 +1084,19 @@ mutable struct HeatPumpFast{E<:EoSModel,T<:Real,Z<:AbstractVector{T}} <: Abstrac
     crit::NTuple{3,T}
 end
 
+function crit_mix!(model::HeatPumpFast{E,T}) where {E,T}
+    #TODO: this is probably not thread safe. safeguard this function behind a lock
+    crit0 = model.crit
+    if crit0 == (T(-1),T(-1),T(-1))
+        Tc,Pc,Vc = crit_mix(model.fluid,model.z)
+        model.crit = (T(Tc),T(Pc),T(Vc))
+        return model.crit
+    else
+        return crit0
+    end
+end
+
+
 function HeatPumpFast(;fluid::EoSModel,z,T_evap_in,T_evap_out,T_cond_in,T_cond_out,η_comp,pp_evap,pp_cond,ΔT_sh,ΔT_sc,check_subcritical = true)
     #@assert fluid isa CubicModel || fluid isa SingleFluid || fluid isa MultiFluid "The type of EOS provided is not supported as of now."
     #default assertions
